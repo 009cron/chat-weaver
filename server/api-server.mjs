@@ -1,32 +1,73 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT_DIR = path.resolve(__dirname, "..");
+const DATA_DIR = path.join(ROOT_DIR, "data");
+const UPLOAD_DIR = path.join(ROOT_DIR, "uploads");
+const DB_FILE = path.join(DATA_DIR, "chat-db.json");
+
+fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
 const app = express();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024, files: 10 },
+});
+
 const PORT = Number(process.env.PORT || 3001);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v3.2";
 const OPENROUTER_REASONING_ENABLED = process.env.OPENROUTER_REASONING_ENABLED === "true";
+const OPENROUTER_STT_MODEL = process.env.OPENROUTER_STT_MODEL || "openai/whisper-1";
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+app.use("/uploads", express.static(UPLOAD_DIR));
 
-const sessions = new Map();
+function loadDb() {
+  if (!fs.existsSync(DB_FILE)) {
+    return { sessions: {} };
+  }
+
+  try {
+    const raw = fs.readFileSync(DB_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return { sessions: parsed.sessions || {} };
+  } catch {
+    return { sessions: {} };
+  }
+}
+
+function saveDb() {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+const db = loadDb();
 
 function getSessionStore(sessionId) {
   const key = sessionId || "default";
-  if (!sessions.has(key)) {
-    sessions.set(key, {
-      conversations: new Map(),
-    });
+  if (!db.sessions[key]) {
+    db.sessions[key] = {
+      conversations: {},
+      attachments: {},
+    };
+    saveDb();
   }
-  return sessions.get(key);
+  return db.sessions[key];
 }
 
 function getConversation(store, conversationId) {
-  if (!conversationId || !store.conversations.has(conversationId)) {
+  if (!conversationId || !store.conversations[conversationId]) {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const conv = {
@@ -36,10 +77,11 @@ function getConversation(store, conversationId) {
       updatedAt: now,
       messages: [],
     };
-    store.conversations.set(id, conv);
+    store.conversations[id] = conv;
+    saveDb();
     return conv;
   }
-  return store.conversations.get(conversationId);
+  return store.conversations[conversationId];
 }
 
 function toConversationSummary(conv) {
@@ -61,12 +103,12 @@ function toConversationSummary(conv) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(OPENROUTER_API_KEY) });
+  res.json({ ok: true, hasApiKey: Boolean(OPENROUTER_API_KEY), dbFile: DB_FILE });
 });
 
 app.get("/api/conversations", (req, res) => {
   const store = getSessionStore(req.header("X-Session-ID"));
-  const conversations = Array.from(store.conversations.values())
+  const conversations = Object.values(store.conversations)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .map(toConversationSummary);
 
@@ -75,7 +117,7 @@ app.get("/api/conversations", (req, res) => {
 
 app.get("/api/conversations/:id", (req, res) => {
   const store = getSessionStore(req.header("X-Session-ID"));
-  const conv = store.conversations.get(req.params.id);
+  const conv = store.conversations[req.params.id];
   if (!conv) {
     return res.status(404).json({ error: "Conversation not found" });
   }
@@ -90,21 +132,88 @@ app.get("/api/conversations/:id", (req, res) => {
 
 app.delete("/api/conversations/:id", (req, res) => {
   const store = getSessionStore(req.header("X-Session-ID"));
-  store.conversations.delete(req.params.id);
+  delete store.conversations[req.params.id];
+  saveDb();
   res.status(204).send();
 });
 
-app.post("/api/upload", (_req, res) => {
-  res.status(501).json({ error: "Upload endpoint is not configured yet." });
+app.post("/api/upload", upload.array("files"), (req, res) => {
+  const files = req.files || [];
+  if (!Array.isArray(files) || files.length === 0) {
+    return res.status(400).json({ error: "No files uploaded" });
+  }
+
+  const store = getSessionStore(req.header("X-Session-ID"));
+  const attachments = files.map((file) => {
+    const id = crypto.randomUUID();
+    const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const diskName = `${id}-${safeOriginalName}`;
+    const diskPath = path.join(UPLOAD_DIR, diskName);
+
+    fs.writeFileSync(diskPath, file.buffer);
+
+    const attachment = {
+      id,
+      filename: diskName,
+      originalName: file.originalname,
+      mimeType: file.mimetype || "application/octet-stream",
+      size: file.size,
+      url: `/uploads/${diskName}`,
+      isImage: (file.mimetype || "").startsWith("image/"),
+      createdAt: new Date().toISOString(),
+    };
+
+    store.attachments[id] = attachment;
+    return attachment;
+  });
+
+  saveDb();
+  return res.json({ attachments });
 });
 
-app.post("/api/voice/transcribe", (_req, res) => {
-  res.status(501).json({ error: "Voice transcription endpoint is not configured yet." });
+app.post("/api/voice/transcribe", upload.single("audio"), async (req, res) => {
+  if (!OPENROUTER_API_KEY) {
+    return res.status(500).json({ error: "OPENROUTER_API_KEY is missing on server" });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: "audio file is required" });
+  }
+
+  try {
+    const form = new FormData();
+    form.append("model", OPENROUTER_STT_MODEL);
+    form.append(
+      "file",
+      new Blob([req.file.buffer], { type: req.file.mimetype || "audio/webm" }),
+      req.file.originalname || "recording.webm"
+    );
+
+    const sttResponse = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      },
+      body: form,
+    });
+
+    const payload = await sttResponse.json().catch(() => ({}));
+    if (!sttResponse.ok) {
+      const errorMessage = payload?.error?.message || payload?.error || "Transcription failed";
+      return res.status(sttResponse.status).json({ error: errorMessage });
+    }
+
+    const text = payload.text || "";
+    return res.json({ text });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Transcription request failed";
+    return res.status(500).json({ error: message });
+  }
 });
 
 app.post("/api/chat", async (req, res) => {
   const sessionId = req.header("X-Session-ID") || req.body.sessionId;
-  const { message, conversationId } = req.body || {};
+  const { message, conversationId, attachmentIds = [] } = req.body || {};
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "message is required" });
@@ -121,13 +230,17 @@ app.post("/api/chat", async (req, res) => {
     conversation.title = message.slice(0, 40);
   }
 
+  const attachments = Array.isArray(attachmentIds)
+    ? attachmentIds.map((id) => store.attachments[id]).filter(Boolean)
+    : [];
+
   const userMessageId = crypto.randomUUID();
   conversation.messages.push({
     id: userMessageId,
     role: "user",
     content: message,
     createdAt: new Date().toISOString(),
-    attachments: [],
+    attachments,
   });
 
   const assistantMessageId = crypto.randomUUID();
@@ -141,6 +254,7 @@ app.post("/api/chat", async (req, res) => {
 
   conversation.messages.push(assistantMessage);
   conversation.updatedAt = new Date().toISOString();
+  saveDb();
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -153,7 +267,17 @@ app.post("/api/chat", async (req, res) => {
 
   const history = conversation.messages
     .filter((m) => m.id !== assistantMessageId)
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => {
+      if (m.role !== "user" || !m.attachments || m.attachments.length === 0) {
+        return { role: m.role, content: m.content };
+      }
+
+      const fileList = m.attachments.map((a) => `${a.originalName} (${a.mimeType})`).join(", ");
+      return {
+        role: "user",
+        content: `${m.content}\n\nAttached files: ${fileList}`,
+      };
+    });
 
   try {
     const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -204,6 +328,7 @@ app.post("/api/chat", async (req, res) => {
     }
 
     conversation.updatedAt = new Date().toISOString();
+    saveDb();
     res.write(`data: ${JSON.stringify({ type: "done", assistantMessageId })}\n\n`);
     res.end();
   } catch (error) {
