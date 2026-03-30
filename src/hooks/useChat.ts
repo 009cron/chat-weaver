@@ -1,14 +1,43 @@
-import { useState, useCallback } from "react";
-import { Message, Conversation } from "@/types/chat";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Message, Conversation, Attachment } from "@/types/chat";
+import * as api from "@/api/client";
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
+const generateId = () => crypto.randomUUID();
+
+const DEMO_RESPONSE =
+  "I'm BlackBunny, your AI assistant. I'm currently running in demo mode — connect your backend API to get real AI responses. Feel free to explore the interface!";
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
+  const checkedRef = useRef(false);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
+
+  // Check backend health on mount
+  useEffect(() => {
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+    api.healthCheck().then((ok) => {
+      setBackendAvailable(ok);
+      if (ok) {
+        // Load existing conversations from backend
+        api.listConversations().then((convs) => {
+          setConversations(
+            convs.map((c) => ({
+              id: c.id,
+              title: c.title,
+              messages: [],
+              createdAt: new Date(c.createdAt),
+              updatedAt: new Date(c.updatedAt),
+            }))
+          );
+        }).catch(() => {});
+      }
+    });
+  }, []);
 
   const createConversation = useCallback(() => {
     const conv: Conversation = {
@@ -29,17 +58,55 @@ export function useChat() {
       if (activeConversationId === id) {
         setActiveConversationId(null);
       }
+      if (backendAvailable) {
+        api.deleteConversation(id).catch(() => {});
+      }
     },
-    [activeConversationId]
+    [activeConversationId, backendAvailable]
   );
 
-  const sendMessage = useCallback(
-    async (content: string, attachments?: Message["attachments"]) => {
-      let convId = activeConversationId;
-      if (!convId) {
-        convId = createConversation();
-      }
+  const loadConversation = useCallback(
+    async (id: string) => {
+      setActiveConversationId(id);
+      if (!backendAvailable) return;
 
+      // Check if messages already loaded
+      const conv = conversations.find((c) => c.id === id);
+      if (conv && conv.messages.length > 0) return;
+
+      try {
+        const data = await api.getConversation(id);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  messages: (data.messages || []).map((m: any) => ({
+                    id: m.id,
+                    role: m.role,
+                    content: m.content,
+                    timestamp: new Date(m.createdAt),
+                    attachments: m.attachments?.map((a: any) => ({
+                      id: a.id,
+                      name: a.originalName,
+                      type: a.mimeType,
+                      size: a.size,
+                      url: a.url,
+                    })),
+                  })),
+                }
+              : c
+          )
+        );
+      } catch {
+        // silently fail, local state still works
+      }
+    },
+    [backendAvailable, conversations]
+  );
+
+  const sendMessageDemo = useCallback(
+    async (content: string, convId: string, attachments?: Attachment[]) => {
       const userMsg: Message = {
         id: generateId(),
         role: "user",
@@ -48,7 +115,6 @@ export function useChat() {
         attachments,
       };
 
-      // Update title from first message
       setConversations((prev) =>
         prev.map((c) =>
           c.id === convId
@@ -64,7 +130,6 @@ export function useChat() {
 
       setIsStreaming(true);
 
-      // Create assistant message placeholder
       const assistantId = generateId();
       const assistantMsg: Message = {
         id: assistantId,
@@ -81,12 +146,9 @@ export function useChat() {
         )
       );
 
-      // Simulate streaming for now (will be replaced with real AI)
-      const response = "I'm BlackBunny, your AI assistant. I'm currently running in demo mode — once Lovable Cloud is connected, I'll be powered by real AI. Feel free to explore the interface!";
-      
-      for (let i = 0; i < response.length; i++) {
+      for (let i = 0; i < DEMO_RESPONSE.length; i++) {
         await new Promise((r) => setTimeout(r, 15));
-        const partial = response.slice(0, i + 1);
+        const partial = DEMO_RESPONSE.slice(0, i + 1);
         setConversations((prev) =>
           prev.map((c) =>
             c.id === convId
@@ -103,7 +165,126 @@ export function useChat() {
 
       setIsStreaming(false);
     },
-    [activeConversationId, createConversation]
+    []
+  );
+
+  const sendMessageApi = useCallback(
+    async (content: string, convId: string, attachments?: Attachment[]) => {
+      const userMsg: Message = {
+        id: generateId(),
+        role: "user",
+        content,
+        timestamp: new Date(),
+        attachments,
+      };
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === convId
+            ? {
+                ...c,
+                title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
+                messages: [...c.messages, userMsg],
+                updatedAt: new Date(),
+              }
+            : c
+        )
+      );
+
+      setIsStreaming(true);
+
+      const assistantId = generateId();
+      const assistantMsg: Message = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === convId
+            ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date() }
+            : c
+        )
+      );
+
+      const attachmentIds = attachments
+        ?.filter((a) => a.id)
+        .map((a) => a.id) || [];
+
+      try {
+        await api.streamChat({
+          message: content,
+          conversationId: convId,
+          attachmentIds,
+          onMeta: (data) => {
+            // Update conversation ID if backend assigned a new one
+            if (data.conversationId !== convId) {
+              setConversations((prev) =>
+                prev.map((c) => (c.id === convId ? { ...c, id: data.conversationId } : c))
+              );
+              setActiveConversationId(data.conversationId);
+            }
+          },
+          onDelta: (text) => {
+            setConversations((prev) =>
+              prev.map((c) => ({
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantId ? { ...m, content: m.content + text } : m
+                ),
+              }))
+            );
+          },
+          onDone: () => {
+            setIsStreaming(false);
+          },
+          onError: (msg) => {
+            setConversations((prev) =>
+              prev.map((c) => ({
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: `⚠️ ${msg}` }
+                    : m
+                ),
+              }))
+            );
+            setIsStreaming(false);
+          },
+        });
+      } catch {
+        setConversations((prev) =>
+          prev.map((c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: "⚠️ Failed to connect to the server." }
+                : m
+            ),
+          }))
+        );
+        setIsStreaming(false);
+      }
+    },
+    []
+  );
+
+  const sendMessage = useCallback(
+    async (content: string, attachments?: Attachment[]) => {
+      let convId = activeConversationId;
+      if (!convId) {
+        convId = createConversation();
+      }
+
+      if (backendAvailable) {
+        await sendMessageApi(content, convId, attachments);
+      } else {
+        await sendMessageDemo(content, convId, attachments);
+      }
+    },
+    [activeConversationId, createConversation, backendAvailable, sendMessageApi, sendMessageDemo]
   );
 
   return {
@@ -111,7 +292,8 @@ export function useChat() {
     activeConversation,
     activeConversationId,
     isStreaming,
-    setActiveConversationId,
+    backendAvailable,
+    setActiveConversationId: loadConversation,
     createConversation,
     deleteConversation,
     sendMessage,
