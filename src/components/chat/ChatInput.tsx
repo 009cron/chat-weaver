@@ -1,18 +1,23 @@
 import { useState, useRef, useCallback } from "react";
-import { Send, Paperclip, Mic, X } from "lucide-react";
+import { Send, Paperclip, Mic, X, Loader2 } from "lucide-react";
 import { Attachment } from "@/types/chat";
+import { uploadFiles, transcribeAudio } from "@/api/client";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: Attachment[]) => void;
   disabled?: boolean;
+  backendAvailable?: boolean | null;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, backendAvailable }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
@@ -32,16 +37,38 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    const newAttachments: Attachment[] = Array.from(files).map((f) => ({
-      id: Math.random().toString(36).substring(2),
-      name: f.name,
-      type: f.type,
-      size: f.size,
-    }));
-    setAttachments((prev) => [...prev, ...newAttachments]);
+    if (!files || files.length === 0) return;
+
+    if (backendAvailable) {
+      // Upload to backend
+      setIsUploading(true);
+      try {
+        const uploaded = await uploadFiles(Array.from(files));
+        const newAttachments: Attachment[] = uploaded.map((u) => ({
+          id: u.id,
+          name: u.originalName,
+          type: u.mimeType,
+          size: u.size,
+          url: u.url,
+        }));
+        setAttachments((prev) => [...prev, ...newAttachments]);
+      } catch (err) {
+        console.error("Upload failed:", err);
+      } finally {
+        setIsUploading(false);
+      }
+    } else {
+      // Local-only attachments (demo mode)
+      const newAttachments: Attachment[] = Array.from(files).map((f) => ({
+        id: crypto.randomUUID(),
+        name: f.name,
+        type: f.type,
+        size: f.size,
+      }));
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    }
     e.target.value = "";
   };
 
@@ -49,9 +76,45 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const toggleRecording = () => {
-    setIsRecording((prev) => !prev);
-    // Voice recording would be implemented with Web Audio API + Whisper
+  const toggleRecording = async () => {
+    if (isRecording) {
+      // Stop recording
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        mediaRecorderRef.current = mediaRecorder;
+        chunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+
+          if (backendAvailable) {
+            try {
+              const text = await transcribeAudio(blob);
+              if (text) {
+                setInput((prev) => (prev ? prev + " " + text : text));
+              }
+            } catch (err) {
+              console.error("Transcription failed:", err);
+            }
+          }
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Microphone access denied:", err);
+      }
+    }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -87,10 +150,15 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         <div className="flex items-end gap-2 bg-chat-input rounded-2xl border border-border px-3 py-2 focus-within:border-muted-foreground/50 transition-colors">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+            disabled={isUploading}
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0 disabled:opacity-50"
             title="Attach file"
           >
-            <Paperclip className="h-5 w-5" />
+            {isUploading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Paperclip className="h-5 w-5" />
+            )}
           </button>
           <input
             ref={fileInputRef}

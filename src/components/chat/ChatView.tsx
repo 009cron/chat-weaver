@@ -8,6 +8,7 @@ import { Attachment } from "@/types/chat";
 interface ChatViewProps {
   conversation: Conversation | null;
   isStreaming: boolean;
+  backendAvailable?: boolean | null;
   onSend: (content: string, attachments?: Attachment[]) => void;
 }
 
@@ -41,7 +42,7 @@ function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
   );
 }
 
-export function ChatView({ conversation, isStreaming, onSend }: ChatViewProps) {
+export function ChatView({ conversation, isStreaming, backendAvailable, onSend }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export function ChatView({ conversation, isStreaming, onSend }: ChatViewProps) {
         <EmptyState onSend={(msg) => onSend(msg)} />
       )}
 
-      <ChatInput onSend={onSend} disabled={isStreaming} />
+      <ChatInput onSend={onSend} disabled={isStreaming} backendAvailable={backendAvailable} />
     </div>
   );
 }
