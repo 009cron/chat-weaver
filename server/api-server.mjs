@@ -7,7 +7,8 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.6";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v3.2";
+const OPENROUTER_REASONING_ENABLED = process.env.OPENROUTER_REASONING_ENABLED === "true";
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
@@ -165,6 +166,7 @@ app.post("/api/chat", async (req, res) => {
         model: OPENROUTER_MODEL,
         messages: history,
         stream: true,
+        ...(OPENROUTER_REASONING_ENABLED ? { reasoning: { enabled: true } } : {}),
       }),
     });
 

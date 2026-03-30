@@ -11,7 +11,7 @@ async function main() {
 
   // Stream the response and read usage (including reasoning tokens) from the final chunk.
   const stream = await openrouter.chat.send({
-    model: "anthropic/claude-sonnet-4.6",
+    model: "deepseek/deepseek-v3.2",
     messages: [
       {
         role: "user",

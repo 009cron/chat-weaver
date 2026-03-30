@@ -13,8 +13,9 @@ Create `.env` in project root:
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
 # optional
-OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
+OPENROUTER_MODEL=deepseek/deepseek-v3.2
 PORT=3001
+OPENROUTER_REASONING_ENABLED=false
 ```
 
 ## 2) Run locally

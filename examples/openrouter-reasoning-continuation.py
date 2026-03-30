@@ -4,7 +4,7 @@ import requests
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 API_KEY = os.getenv("OPENROUTER_API_KEY")
-MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6")
+MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v3.2")
 
 if not API_KEY:
     raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
