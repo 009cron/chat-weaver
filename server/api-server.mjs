@@ -25,7 +25,20 @@ const upload = multer({
 });
 
 const PORT = Number(process.env.PORT || 3001);
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_KEYS_RAW = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || "";
+const OPENROUTER_KEYS = OPENROUTER_KEYS_RAW
+  .split(/[\n,]/)
+  .map((k) => k.trim())
+  .filter(Boolean);
+let openRouterKeyIndex = 0;
+
+function getOpenRouterKey() {
+  if (OPENROUTER_KEYS.length === 0) return null;
+  const key = OPENROUTER_KEYS[openRouterKeyIndex % OPENROUTER_KEYS.length];
+  openRouterKeyIndex += 1;
+  return key;
+}
+
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v3.2";
 const OPENROUTER_REASONING_ENABLED = process.env.OPENROUTER_REASONING_ENABLED === "true";
 const OPENROUTER_STT_MODEL = process.env.OPENROUTER_STT_MODEL || "openai/whisper-1";
@@ -103,7 +116,7 @@ function toConversationSummary(conv) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(OPENROUTER_API_KEY), dbFile: DB_FILE });
+  res.json({ ok: true, keyCount: OPENROUTER_KEYS.length, model: OPENROUTER_MODEL, dbFile: DB_FILE });
 });
 
 app.get("/api/conversations", (req, res) => {
@@ -172,8 +185,11 @@ app.post("/api/upload", upload.array("files"), (req, res) => {
 });
 
 app.post("/api/voice/transcribe", upload.single("audio"), async (req, res) => {
-  if (!OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "OPENROUTER_API_KEY is missing on server" });
+  const openRouterKey = getOpenRouterKey();
+  if (!openRouterKey) {
+    return res.status(500).json({
+      error: "Missing OPENROUTER_API_KEY (or OPENROUTER_API_KEYS) on server. On Vercel, set one OpenRouter key that can access your models.",
+    });
   }
 
   if (!req.file) {
@@ -192,7 +208,7 @@ app.post("/api/voice/transcribe", upload.single("audio"), async (req, res) => {
     const sttResponse = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${openRouterKey}`,
       },
       body: form,
     });
@@ -219,8 +235,11 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "message is required" });
   }
 
-  if (!OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "OPENROUTER_API_KEY is missing on server" });
+  const openRouterKey = getOpenRouterKey();
+  if (!openRouterKey) {
+    return res.status(500).json({
+      error: "Missing OPENROUTER_API_KEY (or OPENROUTER_API_KEYS) on server. On Vercel, set one OpenRouter key that can access your models.",
+    });
   }
 
   const store = getSessionStore(sessionId);
@@ -283,7 +302,7 @@ app.post("/api/chat", async (req, res) => {
     const orResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${openRouterKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
