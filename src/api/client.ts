@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
-
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 // ─── Session ID (persisted per browser) ─────────────────────────────────────
@@ -7,7 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 export function getSessionId(): string {
   let id = localStorage.getItem("bb-session-id");
   if (!id) {
-    id = uuidv4();
+    id = crypto.randomUUID();
     localStorage.setItem("bb-session-id", id);
   }
   return id;
