@@ -13,7 +13,7 @@ Create `.env` in project root:
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
 # optional
-OPENROUTER_MODEL=moonshotai/kimi-k2.5
+OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
 PORT=3001
 ```
 
