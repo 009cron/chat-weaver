@@ -54,51 +54,99 @@ export async function streamChat(params: {
   onError: (msg: string) => void;
 }): Promise<void> {
   const sessionId = getSessionId();
+  const controller = new AbortController();
+  const timeoutMs = 45_000;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  const response = await fetch(`${API_BASE}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Session-ID": sessionId,
-    },
-    body: JSON.stringify({
-      message: params.message,
-      conversationId: params.conversationId,
-      sessionId,
-      attachmentIds: params.attachmentIds || [],
-    }),
-  });
+  const resetTimeout = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      controller.abort("stream_timeout");
+    }, timeoutMs);
+  };
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-    params.onError(err.error || "Request failed");
-    return;
-  }
+  try {
+    resetTimeout();
 
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+    const response = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-ID": sessionId,
+      },
+      body: JSON.stringify({
+        message: params.message,
+        conversationId: params.conversationId,
+        sessionId,
+        attachmentIds: params.attachmentIds || [],
+      }),
+      signal: controller.signal,
+    });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      params.onError(err.error || "Request failed");
+      return;
+    }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop()!;
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let metaMessageId = "";
+    let didFinish = false;
 
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
+    const handleLine = (line: string) => {
+      if (!line.startsWith("data: ")) return;
       try {
         const data = JSON.parse(line.slice(6));
-        if (data.type === "meta") params.onMeta(data);
-        else if (data.type === "delta") params.onDelta(data.text);
-        else if (data.type === "done") params.onDone(data.assistantMessageId);
-        else if (data.type === "error") params.onError(data.message);
+        if (data.type === "meta") {
+          metaMessageId = data.messageId || metaMessageId;
+          params.onMeta(data);
+        } else if (data.type === "delta") {
+          params.onDelta(data.text);
+        } else if (data.type === "done") {
+          didFinish = true;
+          params.onDone(data.assistantMessageId || metaMessageId);
+        } else if (data.type === "error") {
+          didFinish = true;
+          params.onError(data.message || "Streaming failed");
+        }
       } catch {
         // ignore malformed SSE lines
       }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      resetTimeout();
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        handleLine(line);
+      }
     }
+
+    // Process any final buffered line if stream closed without trailing newline.
+    if (buffer.trim()) {
+      handleLine(buffer.trim());
+    }
+
+    // Safety: some hosts/proxies may close stream without explicit done/error event.
+    if (!didFinish) {
+      params.onDone(metaMessageId);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      params.onError("Request timeout. Coba kirim ulang ya.");
+      return;
+    }
+    params.onError("Failed to connect to the server.");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
