@@ -10,6 +10,7 @@ const Index = () => {
     activeConversation,
     activeConversationId,
     isStreaming,
+    backendAvailable,
     setActiveConversationId,
     createConversation,
     deleteConversation,
@@ -66,6 +67,7 @@ const Index = () => {
         <ChatView
           conversation={activeConversation}
           isStreaming={isStreaming}
+          backendAvailable={backendAvailable}
           onSend={sendMessage}
         />
       </div>
