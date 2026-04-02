@@ -15,18 +15,26 @@ Create `.env` in project root (or edit the generated file):
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
 # optional: multiple keys (comma or newline separated)
 # OPENROUTER_API_KEYS=sk-or-v1-key1,sk-or-v1-key2
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
-OPENROUTER_STT_MODEL=openai/whisper-1
+
 PORT=3001
-OPENROUTER_REASONING_ENABLED=false
-# optional: force upstream mode (true=stream from OpenRouter, false=single completion)
 OPENROUTER_UPSTREAM_STREAM=false
+OPENROUTER_REASONING_ENABLED=false
+OPENROUTER_STT_MODEL=openai/whisper-1
+OPENROUTER_MODEL=deepseek/deepseek-v3.2
+
+# Final preset (personal + cost-aware)
 AGENT_GENERAL_MODEL=deepseek/deepseek-v3.2
-AGENT_CODER_MODEL=deepseek/deepseek-v3.2
-AGENT_RESEARCH_MODEL=deepseek/deepseek-v3.2
-AGENT_DESIGNER_MODEL=deepseek/deepseek-v3.2
+AGENT_CODER_MODEL=qwen/qwen3-coder-30b-a3b-instruct
+AGENT_RESEARCH_MODEL=anthropic/claude-sonnet-4.6
+AGENT_DESIGNER_MODEL=anthropic/claude-sonnet-4.6
 AGENT_BUILDER_MODEL=deepseek/deepseek-v3.2
 ```
+
+### Suggested final profiles
+
+- **Cost-aware (recommended personal):** use the default `.env.example` values above.
+- **Budget mode:** set all `AGENT_*_MODEL` to `deepseek/deepseek-v3.2`.
+- **Quality mode:** keep `coder=qwen3-coder`, `research/designer=claude-sonnet-4.6`.
 
 ## 2) Run locally
 
