@@ -18,13 +18,6 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2
 OPENROUTER_STT_MODEL=openai/whisper-1
 PORT=3001
 OPENROUTER_REASONING_ENABLED=false
-# optional: force upstream mode (true=stream from OpenRouter, false=single completion)
-OPENROUTER_UPSTREAM_STREAM=false
-AGENT_GENERAL_MODEL=deepseek/deepseek-v3.2
-AGENT_CODER_MODEL=deepseek/deepseek-v3.2
-AGENT_RESEARCH_MODEL=deepseek/deepseek-v3.2
-AGENT_DESIGNER_MODEL=deepseek/deepseek-v3.2
-AGENT_BUILDER_MODEL=deepseek/deepseek-v3.2
 ```
 
 ## 2) Run locally
@@ -58,11 +51,9 @@ So chats and attachment history survive server restarts.
 - Keep `OPENROUTER_API_KEY` only in server environment variables (never commit).
 - On Vercel, set `OPENROUTER_API_KEY` (or `OPENROUTER_API_KEYS`) in Project Settings → Environment Variables.
 - You do **not** need separate Anthropic/OpenAI/DeepSeek keys when routing via OpenRouter.
-- On Vercel we recommend `OPENROUTER_UPSTREAM_STREAM=false` for stability (frontend still receives SSE events).
 - Deploy frontend and API together (or set `VITE_API_URL` to your deployed API base URL).
 - Required API routes implemented in this repo:
   - `GET /api/health`
-  - `GET /api/agents`
   - `GET /api/conversations`
   - `GET /api/conversations/:id`
   - `DELETE /api/conversations/:id`
