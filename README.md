@@ -133,3 +133,7 @@ A standalone UI shell is available at:
 - `examples/agentic-builder-api-enabled.html`
 
 Open it directly in the browser for a quick static prototype preview. Wire its message action to `/api/chat` for live backend responses.
+
+The prototype is inspired by GSD methodology and references:
+
+- https://github.com/gsd-build/get-shit-done
