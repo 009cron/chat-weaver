@@ -34,6 +34,7 @@ AGENT_PLANNER_MODEL=deepseek/deepseek-v3.2
 AGENT_DOCS_MODEL=deepseek/deepseek-v3.2
 AGENT_ANALYST_MODEL=deepseek/deepseek-v3.2
 AGENT_DEBUGGER_MODEL=deepseek/deepseek-v3.2
+WORKSPACE_DIR=./workspace
 ```
 
 ### Suggested final profiles
@@ -78,6 +79,8 @@ So chats and attachment history survive server restarts.
 - Required API routes implemented in this repo:
   - `GET /api/health`
   - `GET /api/agents`
+  - `GET /api/workspace/tree`
+  - `GET /api/workspace/file?path=...`
   - `GET /api/conversations`
   - `GET /api/conversations/:id`
   - `DELETE /api/conversations/:id`
@@ -93,3 +96,12 @@ So chats and attachment history survive server restarts.
 - Parsed text is chunked and injected into chat context so agents can answer based on file contents.
 - Unsupported/binary formats are still stored as attachments but not parsed automatically.
 
+
+
+## 6) Workspace references in chat
+
+You can reference workspace files directly in a prompt:
+
+- `@file:path/to/file.ext`
+
+The backend will read and inject file content (truncated) into the model context.

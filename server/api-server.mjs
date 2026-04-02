@@ -14,9 +14,11 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = path.join(ROOT_DIR, "uploads");
 const DB_FILE = path.join(DATA_DIR, "chat-db.json");
+const WORKSPACE_DIR = path.resolve(process.env.WORKSPACE_DIR || path.join(ROOT_DIR, "workspace"));
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
 
 const app = express();
 const upload = multer({
@@ -181,6 +183,62 @@ function extractFileText(file) {
   }
 }
 
+
+function safeWorkspacePath(relativePath = "") {
+  const normalized = relativePath.replace(/^\/+/, "");
+  const fullPath = path.resolve(WORKSPACE_DIR, normalized);
+  if (!fullPath.startsWith(WORKSPACE_DIR)) {
+    throw new Error("Invalid workspace path");
+  }
+  return fullPath;
+}
+
+function listWorkspaceTree(dir, base = "", depth = 0, maxDepth = 3) {
+  if (depth > maxDepth) return [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const nodes = [];
+  for (const entry of entries) {
+    const rel = path.posix.join(base, entry.name);
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      nodes.push({ path: rel, type: "dir" });
+      nodes.push(...listWorkspaceTree(full, rel, depth + 1, maxDepth));
+    } else {
+      nodes.push({ path: rel, type: "file" });
+    }
+  }
+  return nodes;
+}
+
+function expandFileReferences(message) {
+  const refs = [...message.matchAll(/@file:([^\s]+)/g)].map((m) => m[1]);
+  if (refs.length === 0) {
+    return { enriched: message, references: [] };
+  }
+
+  const chunks = [];
+  for (const ref of refs.slice(0, 5)) {
+    try {
+      const full = safeWorkspacePath(ref);
+      const stat = fs.statSync(full);
+      if (!stat.isFile()) continue;
+      const raw = fs.readFileSync(full, "utf8").slice(0, 4000);
+      chunks.push(`File: ${ref}\n${raw}`);
+    } catch {
+      // ignore invalid/unreadable references
+    }
+  }
+
+  if (chunks.length === 0) {
+    return { enriched: message, references: [] };
+  }
+
+  return {
+    enriched: `${message}\n\nReferenced workspace files:\n\n${chunks.join("\n\n---\n\n")}`,
+    references: refs,
+  };
+}
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
@@ -256,12 +314,33 @@ function toConversationSummary(conv) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, keyCount: OPENROUTER_KEYS.length, model: OPENROUTER_MODEL, upstreamStream: OPENROUTER_UPSTREAM_STREAM, dbFile: DB_FILE });
+  res.json({ ok: true, keyCount: OPENROUTER_KEYS.length, model: OPENROUTER_MODEL, upstreamStream: OPENROUTER_UPSTREAM_STREAM, dbFile: DB_FILE, workspaceDir: WORKSPACE_DIR });
 });
 
 app.get("/api/agents", (_req, res) => {
   const agents = Object.entries(AGENTS).map(([id, cfg]) => ({ id, label: cfg.label, model: cfg.model }));
   res.json({ agents });
+});
+
+app.get("/api/workspace/tree", (_req, res) => {
+  try {
+    const tree = listWorkspaceTree(WORKSPACE_DIR);
+    return res.json({ root: WORKSPACE_DIR, items: tree });
+  } catch {
+    return res.status(500).json({ error: "Failed to read workspace tree" });
+  }
+});
+
+app.get("/api/workspace/file", (req, res) => {
+  const relPath = String(req.query.path || "");
+  if (!relPath) return res.status(400).json({ error: "path is required" });
+  try {
+    const fullPath = safeWorkspacePath(relPath);
+    const content = fs.readFileSync(fullPath, "utf8");
+    return res.json({ path: relPath, content });
+  } catch {
+    return res.status(404).json({ error: "File not found" });
+  }
 });
 
 app.get("/api/conversations", (req, res) => {
@@ -403,11 +482,13 @@ app.post("/api/chat", async (req, res) => {
     ? attachmentIds.map((id) => store.attachments[id]).filter(Boolean)
     : [];
 
+  const { enriched: enrichedMessage } = expandFileReferences(message);
+
   const userMessageId = crypto.randomUUID();
   conversation.messages.push({
     id: userMessageId,
     role: "user",
-    content: message,
+    content: enrichedMessage,
     createdAt: new Date().toISOString(),
     attachments,
   });

@@ -207,7 +207,7 @@ export function ChatInput({ onSend, disabled, backendAvailable, selectedAgentId 
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Message BlackBunny..."
+            placeholder="Message BlackBunny... (tip: @file:workspace/script.js)"
             rows={1}
             disabled={disabled}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none py-2 max-h-40"
