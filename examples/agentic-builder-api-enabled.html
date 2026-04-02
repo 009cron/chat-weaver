@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGENTIC BUILDER // API-Enabled</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --bg-hover: #222222;
+            --border: #2a2a2a;
+            --border-light: #333333;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --text-muted: #555555;
+            --accent: #ffffff;
+            --accent-dim: #cccccc;
+            --success: #ffffff;
+            --warning: #aaaaaa;
+            --error: #ff4444;
+            --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: 40px 1fr;
+        }
+        .top-bar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            justify-content: space-between;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .main-container { display: grid; grid-template-columns: 260px 1fr 320px; overflow: hidden; }
+        .sidebar, .agent-panel { background: var(--bg-secondary); display:flex; flex-direction:column; }
+        .sidebar { border-right: 1px solid var(--border); }
+        .agent-panel { border-left: 1px solid var(--border); }
+        .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+        .editor-container { display: flex; flex-direction: column; background: var(--bg-primary); }
+        .editor { flex: 1; width: 100%; border: none; outline: none; resize: none; background: transparent; color: var(--text-primary); font-family: var(--font-mono); padding: 20px; }
+        .chat-area { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .message-content { background: var(--bg-tertiary); padding: 12px; border-radius: 4px; border: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
+        .input-area { padding: 16px; border-top: 1px solid var(--border); }
+        .input-wrapper { display: flex; gap: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; padding: 4px; }
+        .chat-input { flex:1; background: transparent; border:none; color:var(--text-primary); padding:10px 12px; outline:none; }
+        .send-btn { background: var(--text-primary); color: var(--bg-primary); border: none; padding: 10px 16px; border-radius:3px; cursor:pointer; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div>AGENTIC BUILDER</div>
+        <div>API-Enabled Prototype</div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="panel-header">Explorer</div>
+        </div>
+
+        <div class="editor-container">
+            <textarea class="editor" id="editor">// Agentic Builder API-enabled prototype
+// This file is included as a standalone UI reference.
+// Paste your full implementation logic here if needed.</textarea>
+        </div>
+
+        <div class="agent-panel">
+            <div class="panel-header">Agent</div>
+            <div class="chat-area" id="chatArea">
+                <div class="message-content">
+                    Welcome to Agentic Builder. This example demonstrates the API-enabled layout and interaction shell.
+                </div>
+            </div>
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <input class="chat-input" id="chatInput" placeholder="Type a request..." />
+                    <button class="send-btn" id="sendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+      const sendBtn = document.getElementById('sendBtn');
+      const chatInput = document.getElementById('chatInput');
+      const chatArea = document.getElementById('chatArea');
+
+      function addMessage(text) {
+        const node = document.createElement('div');
+        node.className = 'message-content';
+        node.textContent = text;
+        chatArea.appendChild(node);
+        chatArea.scrollTop = chatArea.scrollHeight;
+      }
+
+      sendBtn.addEventListener('click', () => {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        addMessage(`You: ${text}`);
+        addMessage(`Agent: Received "${text}". Connect this shell to /api/chat for live responses.`);
+        chatInput.value = '';
+      });
+    </script>
+</body>
+</html>
