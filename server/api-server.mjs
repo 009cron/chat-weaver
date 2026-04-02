@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { OpenRouter } from "@openrouter/sdk";
 
 dotenv.config();
 
@@ -45,9 +46,21 @@ function getOpenRouterKey() {
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v3.2";
 const OPENROUTER_REASONING_ENABLED = process.env.OPENROUTER_REASONING_ENABLED === "true";
 const OPENROUTER_STT_MODEL = process.env.OPENROUTER_STT_MODEL || "openai/whisper-1";
+const OPENROUTER_REFERER = process.env.OPENROUTER_REFERER || "";
+const OPENROUTER_TITLE = process.env.OPENROUTER_TITLE || "";
 const OPENROUTER_UPSTREAM_STREAM =
   process.env.OPENROUTER_UPSTREAM_STREAM === "true" ||
   (!process.env.VERCEL && process.env.OPENROUTER_UPSTREAM_STREAM !== "false");
+
+function getOpenRouterClient(apiKey) {
+  const defaultHeaders = {};
+  if (OPENROUTER_REFERER) defaultHeaders["HTTP-Referer"] = OPENROUTER_REFERER;
+  if (OPENROUTER_TITLE) defaultHeaders["X-OpenRouter-Title"] = OPENROUTER_TITLE;
+  return new OpenRouter({
+    apiKey,
+    ...(Object.keys(defaultHeaders).length > 0 ? { defaultHeaders } : {}),
+  });
+}
 
 
 const AGENTS = {
@@ -583,6 +596,8 @@ app.post("/api/voice/transcribe", upload.single("audio"), async (req, res) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openRouterKey}`,
+        ...(OPENROUTER_REFERER ? { "HTTP-Referer": OPENROUTER_REFERER } : {}),
+        ...(OPENROUTER_TITLE ? { "X-OpenRouter-Title": OPENROUTER_TITLE } : {}),
       },
       body: form,
     });
@@ -734,26 +749,14 @@ If user shifts topics before resolution, remind them to finish/resolve the activ
 
   try {
     if (!OPENROUTER_UPSTREAM_STREAM) {
-      const completionResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openRouterKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: agentConfig.model,
-          messages: history,
-          ...(OPENROUTER_REASONING_ENABLED ? { reasoning: { enabled: true } } : {}),
-        }),
+      const openRouter = getOpenRouterClient(openRouterKey);
+      const completion = await openRouter.chat.send({
+        model: agentConfig.model,
+        messages: history,
+        stream: false,
+        ...(OPENROUTER_REASONING_ENABLED ? { reasoning: { enabled: true } } : {}),
       });
-
-      const payload = await completionResponse.json().catch(() => ({}));
-      if (!completionResponse.ok) {
-        const errorMessage = payload?.error?.message || payload?.error || "OpenRouter request failed";
-        throw new Error(errorMessage);
-      }
-
-      const text = payload?.choices?.[0]?.message?.content || "";
+      const text = completion?.choices?.[0]?.message?.content || "";
       assistantMessage.content = text;
       conversation.updatedAt = new Date().toISOString();
       saveDb();
@@ -771,6 +774,8 @@ If user shifts topics before resolution, remind them to finish/resolve the activ
       headers: {
         Authorization: `Bearer ${openRouterKey}`,
         "Content-Type": "application/json",
+        ...(OPENROUTER_REFERER ? { "HTTP-Referer": OPENROUTER_REFERER } : {}),
+        ...(OPENROUTER_TITLE ? { "X-OpenRouter-Title": OPENROUTER_TITLE } : {}),
       },
       body: JSON.stringify({
         model: agentConfig.model,

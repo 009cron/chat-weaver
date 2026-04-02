@@ -21,6 +21,8 @@ OPENROUTER_UPSTREAM_STREAM=false
 OPENROUTER_REASONING_ENABLED=false
 OPENROUTER_STT_MODEL=openai/whisper-1
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_REFERER=
+OPENROUTER_TITLE=
 
 # Final preset (personal + cost-aware)
 AGENT_GENERAL_MODEL=deepseek/deepseek-v3.2
