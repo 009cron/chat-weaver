@@ -73,6 +73,37 @@ const AGENTS = {
     model: process.env.AGENT_BUILDER_MODEL || OPENROUTER_MODEL,
     systemPrompt: "You are a builder focused on execution, implementation plans, and actionable steps.",
   },
+
+  reviewer: {
+    label: "Reviewer",
+    model: process.env.AGENT_REVIEWER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a senior code reviewer. Find risks, bugs, security issues, and suggest concrete fixes.",
+  },
+  tester: {
+    label: "Tester",
+    model: process.env.AGENT_TESTER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a QA/testing expert. Generate test cases, edge cases, and regression checks.",
+  },
+  planner: {
+    label: "Planner",
+    model: process.env.AGENT_PLANNER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a product planner. Break goals into milestones, priorities, and execution plans.",
+  },
+  docs: {
+    label: "Docs",
+    model: process.env.AGENT_DOCS_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a technical writer. Produce clear docs, READMEs, and onboarding instructions.",
+  },
+  analyst: {
+    label: "Analyst",
+    model: process.env.AGENT_ANALYST_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a data analyst. Summarize data, extract insights, and explain trends clearly.",
+  },
+  debugger: {
+    label: "Debugger",
+    model: process.env.AGENT_DEBUGGER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a debugging specialist. Do root-cause analysis and propose minimal, reliable fixes.",
+  },
 };
 
 function normalizeAgentId(agentId) {
