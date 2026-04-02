@@ -46,6 +46,39 @@ const OPENROUTER_UPSTREAM_STREAM =
   process.env.OPENROUTER_UPSTREAM_STREAM === "true" ||
   (!process.env.VERCEL && process.env.OPENROUTER_UPSTREAM_STREAM !== "false");
 
+
+const AGENTS = {
+  general: {
+    label: "General",
+    model: process.env.AGENT_GENERAL_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a helpful general assistant.",
+  },
+  coder: {
+    label: "Coder",
+    model: process.env.AGENT_CODER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are an expert software engineer. Provide concise, practical coding help.",
+  },
+  research: {
+    label: "Research",
+    model: process.env.AGENT_RESEARCH_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a meticulous research assistant. Structure findings clearly and mention uncertainty.",
+  },
+  designer: {
+    label: "Designer",
+    model: process.env.AGENT_DESIGNER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a product and UI/UX design assistant. Prioritize clarity and user experience.",
+  },
+  builder: {
+    label: "Builder",
+    model: process.env.AGENT_BUILDER_MODEL || OPENROUTER_MODEL,
+    systemPrompt: "You are a builder focused on execution, implementation plans, and actionable steps.",
+  },
+};
+
+function normalizeAgentId(agentId) {
+  return AGENTS[agentId] ? agentId : "general";
+}
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
@@ -92,6 +125,7 @@ function getConversation(store, conversationId) {
       createdAt: now,
       updatedAt: now,
       messages: [],
+      agentId: "general",
     };
     store.conversations[id] = conv;
     saveDb();
@@ -115,11 +149,17 @@ function toConversationSummary(conv) {
       : null,
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
+    agentId: conv.agentId || "general",
   };
 }
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, keyCount: OPENROUTER_KEYS.length, model: OPENROUTER_MODEL, upstreamStream: OPENROUTER_UPSTREAM_STREAM, dbFile: DB_FILE });
+});
+
+app.get("/api/agents", (_req, res) => {
+  const agents = Object.entries(AGENTS).map(([id, cfg]) => ({ id, label: cfg.label, model: cfg.model }));
+  res.json({ agents });
 });
 
 app.get("/api/conversations", (req, res) => {
@@ -139,6 +179,7 @@ app.get("/api/conversations/:id", (req, res) => {
   }
   return res.json({
     id: conv.id,
+    agentId: conv.agentId || "general",
     title: conv.title,
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
@@ -232,7 +273,7 @@ app.post("/api/voice/transcribe", upload.single("audio"), async (req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   const sessionId = req.header("X-Session-ID") || req.body.sessionId;
-  const { message, conversationId, attachmentIds = [] } = req.body || {};
+  const { message, conversationId, attachmentIds = [], agentId = "general" } = req.body || {};
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "message is required" });
@@ -251,6 +292,9 @@ app.post("/api/chat", async (req, res) => {
   if (conversation.messages.length === 0) {
     conversation.title = message.slice(0, 40);
   }
+
+  conversation.agentId = normalizeAgentId(agentId || conversation.agentId || "general");
+  const agentConfig = AGENTS[conversation.agentId] || AGENTS.general;
 
   const attachments = Array.isArray(attachmentIds)
     ? attachmentIds.map((id) => store.attachments[id]).filter(Boolean)
@@ -287,9 +331,11 @@ app.post("/api/chat", async (req, res) => {
     `data: ${JSON.stringify({ type: "meta", conversationId: conversation.id, messageId: assistantMessageId })}\n\n`
   );
 
-  const history = conversation.messages
-    .filter((m) => m.id !== assistantMessageId)
-    .map((m) => {
+  const history = [
+    { role: "system", content: agentConfig.systemPrompt },
+    ...conversation.messages
+      .filter((m) => m.id !== assistantMessageId)
+      .map((m) => {
       if (m.role !== "user" || !m.attachments || m.attachments.length === 0) {
         return { role: m.role, content: m.content };
       }
@@ -299,7 +345,8 @@ app.post("/api/chat", async (req, res) => {
         role: "user",
         content: `${m.content}\n\nAttached files: ${fileList}`,
       };
-    });
+    }),
+  ];
 
   try {
     if (!OPENROUTER_UPSTREAM_STREAM) {
@@ -310,7 +357,7 @@ app.post("/api/chat", async (req, res) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: OPENROUTER_MODEL,
+          model: agentConfig.model,
           messages: history,
           ...(OPENROUTER_REASONING_ENABLED ? { reasoning: { enabled: true } } : {}),
         }),
@@ -342,7 +389,7 @@ app.post("/api/chat", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: agentConfig.model,
         messages: history,
         stream: true,
         ...(OPENROUTER_REASONING_ENABLED ? { reasoning: { enabled: true } } : {}),

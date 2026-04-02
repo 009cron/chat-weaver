@@ -35,6 +35,7 @@ export interface ApiMessage {
 
 export interface ApiConversation {
   id: string;
+  agentId?: string;
   title: string;
   messageCount: number;
   lastMessage: { content: string; role: string; createdAt: string } | null;
@@ -48,6 +49,7 @@ export async function streamChat(params: {
   message: string;
   conversationId?: string;
   attachmentIds?: string[];
+  agentId?: string;
   onMeta: (data: { conversationId: string; messageId: string }) => void;
   onDelta: (text: string) => void;
   onDone: (assistantMessageId: string) => void;
@@ -79,6 +81,7 @@ export async function streamChat(params: {
         conversationId: params.conversationId,
         sessionId,
         attachmentIds: params.attachmentIds || [],
+        agentId: params.agentId || "general",
       }),
       signal: controller.signal,
     });
