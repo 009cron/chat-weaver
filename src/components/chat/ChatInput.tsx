@@ -1,18 +1,28 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Send, Paperclip, Mic, X, Loader2 } from "lucide-react";
-import { Attachment } from "@/types/chat";
+import { AgentId, Attachment } from "@/types/chat";
 import { uploadFiles, transcribeAudio } from "@/api/client";
 
 interface ChatInputProps {
-  onSend: (content: string, attachments?: Attachment[]) => void;
+  onSend: (content: string, attachments?: Attachment[], agentId?: AgentId) => void;
   disabled?: boolean;
   backendAvailable?: boolean | null;
+  selectedAgentId?: AgentId;
 }
 
-export function ChatInput({ onSend, disabled, backendAvailable }: ChatInputProps) {
+const AGENTS: { id: AgentId; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "coder", label: "Coder" },
+  { id: "research", label: "Research" },
+  { id: "designer", label: "Designer" },
+  { id: "builder", label: "Builder" },
+];
+
+export function ChatInput({ onSend, disabled, backendAvailable, selectedAgentId = "general" }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [agentId, setAgentId] = useState<AgentId>(selectedAgentId);
   const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,13 +32,13 @@ export function ChatInput({ onSend, disabled, backendAvailable }: ChatInputProps
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed && attachments.length === 0) return;
-    onSend(trimmed, attachments.length > 0 ? attachments : undefined);
+    onSend(trimmed, attachments.length > 0 ? attachments : undefined, agentId);
     setInput("");
     setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, attachments, onSend]);
+  }, [input, attachments, onSend, agentId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -117,6 +127,10 @@ export function ChatInput({ onSend, disabled, backendAvailable }: ChatInputProps
     }
   };
 
+  useEffect(() => {
+    setAgentId(selectedAgentId);
+  }, [selectedAgentId]);
+
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = e.target;
@@ -168,6 +182,19 @@ export function ChatInput({ onSend, disabled, backendAvailable }: ChatInputProps
             onChange={handleFileSelect}
             accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.js,.ts,.tsx,.jsx"
           />
+
+          <select
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value as AgentId)}
+            className="bg-transparent text-xs text-muted-foreground border border-border rounded-md px-2 py-1 h-9"
+            title="Select agent"
+          >
+            {AGENTS.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.label}
+              </option>
+            ))}
+          </select>
 
           <textarea
             ref={textareaRef}
