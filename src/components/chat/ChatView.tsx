@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Conversation } from "@/types/chat";
+import { AgentId, Conversation } from "@/types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
 import { Rabbit } from "lucide-react";
@@ -9,7 +9,7 @@ interface ChatViewProps {
   conversation: Conversation | null;
   isStreaming: boolean;
   backendAvailable?: boolean | null;
-  onSend: (content: string, attachments?: Attachment[]) => void;
+  onSend: (content: string, attachments?: Attachment[], agentId?: AgentId) => void;
 }
 
 function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
@@ -75,7 +75,7 @@ export function ChatView({ conversation, isStreaming, backendAvailable, onSend }
         <EmptyState onSend={(msg) => onSend(msg)} />
       )}
 
-      <ChatInput onSend={onSend} disabled={isStreaming} backendAvailable={backendAvailable} />
+      <ChatInput onSend={onSend} disabled={isStreaming} backendAvailable={backendAvailable} selectedAgentId={conversation?.agentId ?? "general"} />
     </div>
   );
 }

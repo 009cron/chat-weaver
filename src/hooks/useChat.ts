@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Message, Conversation, Attachment } from "@/types/chat";
+import { Message, Conversation, Attachment, AgentId } from "@/types/chat";
 import * as api from "@/api/client";
 
 const generateId = () => crypto.randomUUID();
@@ -32,6 +32,7 @@ export function useChat() {
               messages: [],
               createdAt: new Date(c.createdAt),
               updatedAt: new Date(c.updatedAt),
+              agentId: (c as any).agentId || "general",
             }))
           );
         }).catch(() => {});
@@ -39,13 +40,14 @@ export function useChat() {
     });
   }, []);
 
-  const createConversation = useCallback(() => {
+  const createConversation = useCallback((agentId: AgentId = "general") => {
     const conv: Conversation = {
       id: generateId(),
       title: "New chat",
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      agentId,
     };
     setConversations((prev) => [conv, ...prev]);
     setActiveConversationId(conv.id);
@@ -81,6 +83,7 @@ export function useChat() {
             c.id === id
               ? {
                   ...c,
+                  agentId: data.agentId || c.agentId || "general",
                   messages: (data.messages || []).map((m: any) => ({
                     id: m.id,
                     role: m.role,
@@ -106,7 +109,7 @@ export function useChat() {
   );
 
   const sendMessageDemo = useCallback(
-    async (content: string, convId: string, attachments?: Attachment[]) => {
+    async (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
       const userMsg: Message = {
         id: generateId(),
         role: "user",
@@ -123,6 +126,7 @@ export function useChat() {
                 title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
                 messages: [...c.messages, userMsg],
                 updatedAt: new Date(),
+                agentId,
               }
             : c
         )
@@ -169,7 +173,7 @@ export function useChat() {
   );
 
   const sendMessageApi = useCallback(
-    async (content: string, convId: string, attachments?: Attachment[]) => {
+    async (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
       const userMsg: Message = {
         id: generateId(),
         role: "user",
@@ -186,6 +190,7 @@ export function useChat() {
                 title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
                 messages: [...c.messages, userMsg],
                 updatedAt: new Date(),
+                agentId,
               }
             : c
         )
@@ -218,6 +223,7 @@ export function useChat() {
           message: content,
           conversationId: convId,
           attachmentIds,
+          agentId,
           onMeta: (data) => {
             // Update conversation ID if backend assigned a new one
             if (data.conversationId !== convId) {
@@ -272,16 +278,16 @@ export function useChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: Attachment[]) => {
+    async (content: string, attachments?: Attachment[], agentId: AgentId = "general") => {
       let convId = activeConversationId;
       if (!convId) {
-        convId = createConversation();
+        convId = createConversation(agentId);
       }
 
       if (backendAvailable) {
-        await sendMessageApi(content, convId, attachments);
+        await sendMessageApi(content, convId, attachments, agentId);
       } else {
-        await sendMessageDemo(content, convId, attachments);
+        await sendMessageDemo(content, convId, attachments, agentId);
       }
     },
     [activeConversationId, createConversation, backendAvailable, sendMessageApi, sendMessageDemo]

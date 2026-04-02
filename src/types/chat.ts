@@ -1,3 +1,5 @@
+export type AgentId = "general" | "coder" | "research" | "designer" | "builder" | "reviewer" | "tester" | "planner" | "docs" | "analyst" | "debugger";
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -20,4 +22,5 @@ export interface Conversation {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  agentId?: AgentId;
 }
