@@ -79,6 +79,23 @@ So chats and attachment history survive server restarts.
 - You do **not** need separate Anthropic/OpenAI/DeepSeek keys when routing via OpenRouter.
 - On Vercel we recommend `OPENROUTER_UPSTREAM_STREAM=false` for stability (frontend still receives SSE events).
 - Deploy frontend and API together (or set `VITE_API_URL` to your deployed API base URL).
+
+### Vercel env: wajib atau opsional?
+
+- **Wajib (minimal supaya chat bisa jalan):**
+  - `OPENROUTER_API_KEY` **atau** `OPENROUTER_API_KEYS`
+- **Sangat disarankan di Vercel:**
+  - `OPENROUTER_UPSTREAM_STREAM=false`
+- **Opsional (tuning):**
+  - `OPENROUTER_MODEL`
+  - `AGENT_*_MODEL`
+  - `OPENROUTER_REASONING_ENABLED`
+  - `OPENROUTER_STT_MODEL`
+  - `OPENROUTER_REFERER`, `OPENROUTER_TITLE`
+  - `WORKSPACE_DIR`
+
+Jika env wajib tidak diisi, endpoint `/api/chat` akan gagal karena server tidak punya kredensial provider.
+
 - Required API routes implemented in this repo:
   - `GET /api/health`
   - `GET /api/agents`
