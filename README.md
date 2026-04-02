@@ -26,7 +26,7 @@ OPENROUTER_TITLE=
 
 # Final preset (Qwen free only)
 AGENT_GENERAL_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_CODER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_CODER_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
 AGENT_RESEARCH_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_DESIGNER_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_BUILDER_MODEL=qwen/qwen3.6-plus-preview:free
@@ -41,7 +41,7 @@ WORKSPACE_DIR=./workspace
 
 ### Suggested final profiles
 
-- **Qwen free only (recommended for now):** use the default `.env.example` values above.
+- **Qwen free baseline + stronger coder:** default stays free Qwen for all agents, with `AGENT_CODER_MODEL` set to `qwen/qwen3-next-80b-a3b-instruct:free` for better coding output.
 - **Override mode:** you can still set any `AGENT_*_MODEL` manually later if you want paid/stable options.
 
 ## 2) Run locally
