@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GSD // AGENTIC BUILDER v3.0</title>
-  <meta name="description" content="Zero-lag agentic builder with GSD methodology injection" />
+  <title>Agentic Builder v3.0</title>
+  <meta name="description" content="Zero-lag agentic builder with embedded execution workflow" />
   <style>
     :root { --bg:#050505; --s1:#0a0a0a; --s2:#111; --b:#333; --t:#fff; --tm:#888; --ok:#00ff88; --er:#ff3333; }
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -45,7 +45,7 @@
 <body>
   <div id="app">
     <div class="top">
-      <div><strong>◉ GSD // AGENTIC BUILDER</strong></div>
+      <div><strong>◉ Agentic Builder</strong></div>
       <div style="display:flex; gap:8px;">
         <div id="apiPill" class="pill" onclick="app.openApiModal()"><span class="dot" id="apiDot"></span><span id="apiText">API Required</span></div>
         <div id="autoPill" class="pill" onclick="app.toggleAuto()">Manual</div>
@@ -61,7 +61,7 @@
         <textarea id="editor" class="editor" disabled></textarea>
       </main>
       <aside class="panel right">
-        <div class="hdr">Agent <small style="color:#666">(GSD injected)</small></div>
+        <div class="hdr">Agent</div>
         <div class="chat" id="chat"></div>
         <div class="input">
           <div class="row">
@@ -85,7 +85,7 @@
         <input id="apiKey" class="api-input" type="password" placeholder="API key" />
         <select id="model" class="api-input"></select>
         <label style="color:#aaa; font-size:12px;"><input id="sessionOnly" type="checkbox" checked /> Session only</label>
-        <small style="color:#777">Source methodology: https://github.com/gsd-build/get-shit-done</small>
+        <small style="color:#777">Execution workflow is embedded behind the scenes.</small>
       </div>
       <div class="ftr">
         <button class="btn" onclick="app.closeApiModal()">Cancel</button>
@@ -96,7 +96,7 @@
   </div>
 
   <script>
-    class GSDBuildUI {
+    class AgenticBuilderUI {
       constructor(){
         this.files = new Map();
         this.openTabs = [];
@@ -108,7 +108,7 @@
       }
 
       init(){
-        this.createFile('README.md', '# GSD Agentic Builder\n\n- Context engineering\n- Atomic execution\n- Multi-agent thinking');
+        this.createFile('README.md', '# Agentic Builder\n\n- Context engineering\n- Atomic execution\n- Multi-agent thinking');
         this.openFile('README.md');
         this.renderTree();
         this.renderTabs();
@@ -181,10 +181,10 @@
         const context = {
           activeFile: this.activeTab,
           files: Array.from(this.files.keys()),
-          gsd: { mode: this.auto ? 'auto' : 'manual', methodology: 'get-shit-done' }
+          execution: { mode: this.auto ? 'auto' : 'manual', methodology: 'embedded' }
         };
 
-        const sys = `You are a GSD coding agent. Use atomic tasks and explicit verification.`;
+        const sys = `You are an execution-focused coding agent. Use atomic tasks and explicit verification.`;
         const messages = [
           { role:'system', content:sys },
           ...this.history.slice(-6),
@@ -231,7 +231,7 @@
       }
     }
 
-    const app = new GSDBuildUI();
+    const app = new AgenticBuilderUI();
   </script>
 </body>
 </html>

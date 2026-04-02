@@ -134,18 +134,14 @@ A standalone UI shell is available at:
 
 Open it directly in the browser for a quick static prototype preview. Wire its message action to `/api/chat` for live backend responses.
 
-The prototype is inspired by GSD methodology and references:
+## 9) Execution mode in API chat
 
-- https://github.com/gsd-build/get-shit-done
+The API supports an optional structured execution mode in conversations:
 
-## 9) GSD mode in API chat
-
-The API now supports optional GSD execution mode in conversations:
-
-- `GET /api/gsd/templates` to fetch XML task schema + default GSD prompt
+- `GET /api/gsd/templates` to fetch XML task schema + default execution prompt
 - chat controls:
   - `/gsd on`
   - `/gsd off`
   - `/gsd phase:<name>`
 
-When enabled, chat context injects current GSD phase and requests XML task output for planning/execution flows.
+When enabled, chat context injects current phase state and requests XML task output for planning/execution flows.
