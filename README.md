@@ -139,9 +139,11 @@ Open it directly in the browser for a quick static prototype preview. Wire its m
 The API supports an optional structured execution mode in conversations:
 
 - `GET /api/gsd/templates` to fetch XML task schema + default execution prompt
+- `GET /api/gsd/state/:conversationId` to inspect active execution state
+- `POST /api/gsd/verify` to validate task XML contract
 - chat controls:
   - `/gsd on`
   - `/gsd off`
   - `/gsd phase:<name>`
 
-When enabled, chat context injects current phase state and requests XML task output for planning/execution flows.
+When enabled, chat context injects current phase state and requests XML task output for planning/execution flows. If a task-style response misses required XML tags, backend appends a safe default task block.

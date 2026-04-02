@@ -424,6 +424,21 @@ function extractFirstTaskXml(text = "") {
   return match?.[0] || "";
 }
 
+function validateTaskXml(taskXml = "") {
+  if (!taskXml) return { ok: false, missing: ["task"] };
+  const required = ["name", "files", "action", "verify", "done"];
+  const missing = required.filter((tag) => !new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`, "i").test(taskXml));
+  return { ok: missing.length === 0, missing };
+}
+
+function enforceGsdTaskContract(text = "", shouldRequireTaskXml) {
+  if (!shouldRequireTaskXml) return text;
+  const taskXml = extractFirstTaskXml(text);
+  const validation = validateTaskXml(taskXml);
+  if (validation.ok) return text;
+  return `${text}\n\n<task type="atomic">\n  <name>Define implementation task</name>\n  <files>to-be-determined</files>\n  <action>Specify exact code changes requested by user</action>\n  <verify>Run relevant tests/checks and confirm expected output</verify>\n  <done>User request outcome is achieved and validated</done>\n</task>`;
+}
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
@@ -528,6 +543,22 @@ app.get("/api/gsd/templates", (_req, res) => {
     phases: ["discovery", "requirements", "roadmap", "execution", "verification"],
     controls: ["/gsd on", "/gsd off", "/gsd phase:<name>"],
   });
+});
+
+app.get("/api/gsd/state/:conversationId", (req, res) => {
+  const store = getSessionStore(req.header("X-Session-ID"));
+  const conv = store.conversations[req.params.conversationId];
+  if (!conv) return res.status(404).json({ error: "Conversation not found" });
+  return res.json({
+    conversationId: conv.id,
+    gsd: conv.gsd || { enabled: false, phase: "discovery", lastTaskXml: "" },
+  });
+});
+
+app.post("/api/gsd/verify", (req, res) => {
+  const taskXml = String(req.body?.taskXml || "");
+  const result = validateTaskXml(taskXml);
+  return res.json(result);
 });
 
 app.get("/api/workspace/tree", (_req, res) => {
@@ -741,6 +772,8 @@ app.post("/api/chat", async (req, res) => {
   const gsdContext = conversation.gsd.enabled
     ? `GSD state:\n- enabled: true\n- phase: ${conversation.gsd.phase}\n- xml schema required for plan/task outputs`
     : "";
+  const shouldRequireTaskXml = conversation.gsd.enabled
+    && /\b(plan|task|implement|build|fix|roadmap|execute|scaffold|debug)\b/i.test(message);
   const finalUserMessage = gsdContext ? `${messageWithContext}\n\n${gsdContext}` : messageWithContext;
 
   const userMessageId = crypto.randomUUID();
@@ -841,15 +874,15 @@ ${conversation.gsd.enabled ? `\n${GSD_SYSTEM_PROMPT}\nCurrent GSD phase: ${conve
         text = payload?.choices?.[0]?.message?.content || "";
       }
 
-      assistantMessage.content = text;
+      assistantMessage.content = enforceGsdTaskContract(text, shouldRequireTaskXml);
       if (conversation.gsd?.enabled) {
-        conversation.gsd.lastTaskXml = extractFirstTaskXml(text);
+        conversation.gsd.lastTaskXml = extractFirstTaskXml(assistantMessage.content);
       }
       conversation.updatedAt = new Date().toISOString();
       saveDb();
 
-      if (text) {
-        res.write(`data: ${JSON.stringify({ type: "delta", text })}\n\n`);
+      if (assistantMessage.content) {
+        res.write(`data: ${JSON.stringify({ type: "delta", text: assistantMessage.content })}\n\n`);
       }
       res.write(`data: ${JSON.stringify({ type: "done", assistantMessageId })}\n\n`);
       res.end();
@@ -905,6 +938,14 @@ ${conversation.gsd.enabled ? `\n${GSD_SYSTEM_PROMPT}\nCurrent GSD phase: ${conve
       }
     }
 
+    const finalizedContent = enforceGsdTaskContract(assistantMessage.content, shouldRequireTaskXml);
+    if (finalizedContent !== assistantMessage.content) {
+      const appended = finalizedContent.slice(assistantMessage.content.length);
+      if (appended) {
+        res.write(`data: ${JSON.stringify({ type: "delta", text: appended })}\n\n`);
+      }
+      assistantMessage.content = finalizedContent;
+    }
     conversation.updatedAt = new Date().toISOString();
     if (conversation.gsd?.enabled) {
       conversation.gsd.lastTaskXml = extractFirstTaskXml(assistantMessage.content);
