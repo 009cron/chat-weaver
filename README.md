@@ -13,38 +13,19 @@ Create `.env` in project root (or edit the generated file):
 
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
-# optional: multiple keys (comma or newline separated)
-# OPENROUTER_API_KEYS=sk-or-v1-key1,sk-or-v1-key2
-
-PORT=3001
-OPENROUTER_UPSTREAM_STREAM=false
-OPENROUTER_REASONING_ENABLED=false
-OPENROUTER_STT_MODEL=openai/whisper-1
-OPENROUTER_REFERER=
-OPENROUTER_TITLE=
-WORKSPACE_DIR=./workspace
-
-# Global fallback if agent-specific model is missing
-OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
-
-# Free profile (coder upgraded)
-AGENT_GENERAL_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_CODER_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
-AGENT_RESEARCH_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_DESIGNER_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_BUILDER_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_REVIEWER_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_TESTER_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_PLANNER_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_DOCS_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_ANALYST_MODEL=qwen/qwen3.6-plus-preview:free
-AGENT_DEBUGGER_MODEL=qwen/qwen3.6-plus-preview:free
 ```
 
-### Suggested final profiles
+Itu saja yang **wajib**. Semua env lain punya default internal dan sifatnya opsional untuk tuning.
 
-- **Qwen free baseline + stronger coder:** default stays free Qwen for all agents, with `AGENT_CODER_MODEL` set to `qwen/qwen3-next-80b-a3b-instruct:free` for better coding output.
-- **Override mode:** you can still set any `AGENT_*_MODEL` manually later if you want paid/stable options.
+### Optional tuning (kalau nanti diperlukan)
+
+- `OPENROUTER_MODEL`
+- `AGENT_*_MODEL`
+- `OPENROUTER_UPSTREAM_STREAM`
+- `OPENROUTER_REASONING_ENABLED`
+- `OPENROUTER_STT_MODEL`
+- `OPENROUTER_REFERER`, `OPENROUTER_TITLE`
+- `WORKSPACE_DIR`
 
 ## 2) Run locally
 
@@ -75,7 +56,7 @@ So chats and attachment history survive server restarts.
 ## 4) Deploy notes
 
 - Keep `OPENROUTER_API_KEY` only in server environment variables (never commit).
-- On Vercel, set `OPENROUTER_API_KEY` (or `OPENROUTER_API_KEYS`) in Project Settings → Environment Variables.
+- On Vercel, set `OPENROUTER_API_KEY` in Project Settings → Environment Variables.
 - You do **not** need separate Anthropic/OpenAI/DeepSeek keys when routing via OpenRouter.
 - On Vercel we recommend `OPENROUTER_UPSTREAM_STREAM=false` for stability (frontend still receives SSE events).
 - Deploy frontend and API together (or set `VITE_API_URL` to your deployed API base URL).
@@ -83,7 +64,7 @@ So chats and attachment history survive server restarts.
 ### Vercel env: wajib atau opsional?
 
 - **Wajib (minimal supaya chat bisa jalan):**
-  - `OPENROUTER_API_KEY` **atau** `OPENROUTER_API_KEYS`
+  - `OPENROUTER_API_KEY`
 - **Sangat disarankan di Vercel:**
   - `OPENROUTER_UPSTREAM_STREAM=false`
 - **Opsional (tuning):**
