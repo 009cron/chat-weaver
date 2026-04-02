@@ -114,3 +114,12 @@ The backend will read and inject file content (truncated) into the model context
 - **Auto code-improvement sweep:** for coding/debugging flows, the server scans `WORKSPACE_DIR` for `TODO/FIXME/HACK/BUG/...` markers and injects top findings (`file:line:match`) into chat context.
 
 This helps the assistant keep momentum on one objective while still catching missed code issues across files.
+
+### Human controls (chat commands)
+
+- `/goal set:<text>` → set/replace current active goal explicitly.
+- `/goal resolve` or `/resolve` → mark active goal resolved.
+- `/goal switch` or `/switch` → intentionally bypass topic lock and switch topics.
+- `/sweep on|off|once` → control auto code-improvement sweep behavior.
+
+Performance note: sweep results are cached briefly and hard-timeboxed to avoid chat latency spikes.

@@ -280,40 +280,33 @@ function looksLikeTopicSwitch(message = "") {
   return TOPIC_SWITCH_HINTS.some((hint) => text.includes(hint));
 }
 
-function getTopicKeywords(input = "") {
-  return normalizeText(input)
-    .split(" ")
-    .filter((w) => w.length >= 4)
-    .slice(0, 12);
-}
-
-function overlapScore(a = "", b = "") {
-  const aWords = new Set(getTopicKeywords(a));
-  const bWords = new Set(getTopicKeywords(b));
-  if (aWords.size === 0 || bWords.size === 0) return 1;
-
-  let overlap = 0;
-  for (const word of aWords) {
-    if (bWords.has(word)) overlap += 1;
-  }
-  return overlap / Math.max(1, Math.min(aWords.size, bWords.size));
-}
-
-function shouldBlockTopicSwitch(conversation, userMessage) {
+function shouldBlockTopicSwitch(conversation, userMessage, forceSwitch) {
   const activeGoal = conversation?.goalTracking?.activeGoal;
   if (!activeGoal) return false;
+  if (forceSwitch) return false;
   if (isGoalResolvedMessage(userMessage)) return false;
-  if (looksLikeTopicSwitch(userMessage)) return true;
-  return overlapScore(activeGoal, userMessage) < 0.2;
+  return looksLikeTopicSwitch(userMessage);
 }
 
-function maybeUpdateGoalTracking(conversation, userMessage) {
+function maybeUpdateGoalTracking(conversation, userMessage, controls) {
   if (!conversation.goalTracking) {
     conversation.goalTracking = {
       activeGoal: "",
       startedAt: new Date().toISOString(),
       resolvedAt: null,
     };
+  }
+
+  if (controls.forceResolve) {
+    conversation.goalTracking.resolvedAt = new Date().toISOString();
+    return;
+  }
+
+  if (controls.goalText) {
+    conversation.goalTracking.activeGoal = controls.goalText.slice(0, 300);
+    conversation.goalTracking.startedAt = new Date().toISOString();
+    conversation.goalTracking.resolvedAt = null;
+    return;
   }
 
   if (isGoalResolvedMessage(userMessage)) {
@@ -328,20 +321,62 @@ function maybeUpdateGoalTracking(conversation, userMessage) {
   }
 }
 
+const SWEEP_CACHE_TTL_MS = 30_000;
+let sweepCache = { at: 0, text: "" };
+
 function getCodeSweepContext() {
+  if (Date.now() - sweepCache.at < SWEEP_CACHE_TTL_MS) {
+    return sweepCache.text;
+  }
+
   const command = `rg -n --hidden --glob '!node_modules' --glob '!.git' --glob '!dist' --glob '!build' --glob '!coverage' "(TODO|FIXME|HACK|BUG|XXX|REFACTOR|@ts-ignore|eslint-disable)" "${WORKSPACE_DIR}"`;
   try {
-    const raw = execSync(command, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1024 * 1024 });
+    const raw = execSync(command, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 512 * 1024,
+      timeout: 120,
+    });
     const lines = raw
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 40);
-    if (lines.length === 0) return "";
-    return `Auto code-improvement sweep findings (file:line:match):\n${lines.join("\n")}`;
+      .slice(0, 20);
+    const text = lines.length > 0
+      ? `Auto code-improvement sweep findings (file:line:match):\n${lines.join("\n")}`
+      : "";
+    sweepCache = { at: Date.now(), text };
+    return text;
   } catch {
     return "";
   }
+}
+
+function parseHumanControls(message = "") {
+  const trimmed = message.trim();
+  const controls = {
+    forceResolve: false,
+    forceSwitch: false,
+    goalText: "",
+    sweepMode: "",
+  };
+
+  if (/^\/goal\s+resolve$/i.test(trimmed) || /^\/resolve$/i.test(trimmed)) {
+    controls.forceResolve = true;
+  }
+  if (/^\/goal\s+switch$/i.test(trimmed) || /^\/switch$/i.test(trimmed)) {
+    controls.forceSwitch = true;
+  }
+  const goalMatch = trimmed.match(/^\/goal\s+set:(.+)$/i);
+  if (goalMatch?.[1]) {
+    controls.goalText = goalMatch[1].trim();
+  }
+  const sweepMatch = trimmed.match(/^\/sweep\s+(on|off|once)$/i);
+  if (sweepMatch?.[1]) {
+    controls.sweepMode = sweepMatch[1].toLowerCase();
+  }
+
+  return controls;
 }
 
 app.use(cors());
@@ -395,6 +430,9 @@ function getConversation(store, conversationId) {
         activeGoal: "",
         startedAt: now,
         resolvedAt: null,
+      },
+      userControls: {
+        autoSweep: true,
       },
     };
     store.conversations[id] = conv;
@@ -587,11 +625,18 @@ app.post("/api/chat", async (req, res) => {
 
   conversation.agentId = normalizeAgentId(agentId || conversation.agentId || "general");
   const agentConfig = AGENTS[conversation.agentId] || AGENTS.general;
-  maybeUpdateGoalTracking(conversation, message);
+  const controls = parseHumanControls(message);
+  if (!conversation.userControls) {
+    conversation.userControls = { autoSweep: true };
+  }
+  if (controls.sweepMode === "on") conversation.userControls.autoSweep = true;
+  if (controls.sweepMode === "off") conversation.userControls.autoSweep = false;
 
-  if (shouldBlockTopicSwitch(conversation, message)) {
+  maybeUpdateGoalTracking(conversation, message, controls);
+
+  if (shouldBlockTopicSwitch(conversation, message, controls.forceSwitch)) {
     const reminderMessageId = crypto.randomUUID();
-    const reminder = `Let's finish your current goal first: "${conversation.goalTracking.activeGoal.slice(0, 180)}". Reply with "resolved" (or "selesai") once done, then we can switch topics.`;
+    const reminder = `Let's finish your current goal first: "${conversation.goalTracking.activeGoal.slice(0, 180)}". Reply with "/goal resolve" (or "resolved"/"selesai"), or use "/goal switch" to intentionally switch topic.`;
     conversation.messages.push({
       id: reminderMessageId,
       role: "assistant",
@@ -620,8 +665,9 @@ app.post("/api/chat", async (req, res) => {
     : [];
 
   const { enriched: enrichedMessage } = expandFileReferences(message);
-  const runCodeSweep = ["coder", "reviewer", "debugger", "builder"].includes(conversation.agentId)
-    || /\b(code|bug|refactor|fix|typescript|javascript|react|backend|frontend)\b/i.test(message);
+  const runCodeSweep = (conversation.userControls.autoSweep || controls.sweepMode === "once")
+    && (["coder", "reviewer", "debugger", "builder"].includes(conversation.agentId)
+    || /\b(code|bug|refactor|fix|typescript|javascript|react|backend|frontend)\b/i.test(message));
   const codeSweepContext = runCodeSweep ? getCodeSweepContext() : "";
   const messageWithContext = codeSweepContext ? `${enrichedMessage}\n\n${codeSweepContext}` : enrichedMessage;
 
