@@ -180,7 +180,7 @@ export function ChatInput({ onSend, disabled, backendAvailable, selectedAgentId 
             multiple
             className="hidden"
             onChange={handleFileSelect}
-            accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.js,.ts,.tsx,.jsx"
+            accept="*/*"
           />
 
           <select

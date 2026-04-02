@@ -79,6 +79,77 @@ function normalizeAgentId(agentId) {
   return AGENTS[agentId] ? agentId : "general";
 }
 
+const TEXT_EXTENSIONS = new Set([
+  ".txt",
+  ".md",
+  ".csv",
+  ".json",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".py",
+  ".html",
+  ".css",
+  ".xml",
+  ".yml",
+  ".yaml",
+  ".sql",
+  ".log",
+]);
+
+function chunkText(text, chunkSize = 1500, maxChunks = 6) {
+  const chunks = [];
+  for (let i = 0; i < text.length && chunks.length < maxChunks; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function extractFileText(file) {
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const mime = (file.mimetype || "").toLowerCase();
+
+  const canReadAsText = mime.startsWith("text/") || TEXT_EXTENSIONS.has(ext);
+  if (!canReadAsText) {
+    return {
+      parseStatus: "unsupported",
+      extractedText: null,
+      extractedChunks: [],
+    };
+  }
+
+  try {
+    let text = file.buffer.toString("utf8");
+    if (ext === ".json") {
+      const parsed = JSON.parse(text);
+      text = JSON.stringify(parsed, null, 2);
+    }
+
+    const normalized = text.replace(/\u0000/g, "").trim();
+    if (!normalized) {
+      return {
+        parseStatus: "empty",
+        extractedText: null,
+        extractedChunks: [],
+      };
+    }
+
+    const limited = normalized.slice(0, 24000);
+    return {
+      parseStatus: "parsed",
+      extractedText: limited,
+      extractedChunks: chunkText(limited),
+    };
+  } catch {
+    return {
+      parseStatus: "failed",
+      extractedText: null,
+      extractedChunks: [],
+    };
+  }
+}
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
@@ -217,6 +288,7 @@ app.post("/api/upload", upload.array("files"), (req, res) => {
       size: file.size,
       url: `/uploads/${diskName}`,
       isImage: (file.mimetype || "").startsWith("image/"),
+      ...extractFileText(file),
       createdAt: new Date().toISOString(),
     };
 
@@ -341,9 +413,13 @@ app.post("/api/chat", async (req, res) => {
       }
 
       const fileList = m.attachments.map((a) => `${a.originalName} (${a.mimeType})`).join(", ");
+      const extracted = m.attachments
+        .filter((a) => Array.isArray(a.extractedChunks) && a.extractedChunks.length > 0)
+        .map((a) => `File: ${a.originalName}\n${a.extractedChunks.join("\n---\n")}`)
+        .join("\n\n");
       return {
         role: "user",
-        content: `${m.content}\n\nAttached files: ${fileList}`,
+        content: `${m.content}\n\nAttached files: ${fileList}${extracted ? `\n\nParsed file content:\n${extracted}` : ""}`.slice(0, 12000),
       };
     }),
   ];

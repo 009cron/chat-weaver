@@ -78,3 +78,12 @@ So chats and attachment history survive server restarts.
   - `POST /api/chat` (SSE streaming)
   - `POST /api/upload` (multipart file upload)
   - `POST /api/voice/transcribe` (audio-to-text via OpenRouter)
+
+
+## 5) File parsing behavior
+
+- Upload route accepts any extension (`*/*` from UI).
+- Backend attempts text extraction for text-like formats (`.txt`, `.md`, `.csv`, `.json`, `.js`, `.ts`, `.py`, etc.).
+- Parsed text is chunked and injected into chat context so agents can answer based on file contents.
+- Unsupported/binary formats are still stored as attachments but not parsed automatically.
+
