@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Builder v3.0</title>
+  <meta name="description" content="Zero-lag agentic builder with embedded execution workflow" />
+  <style>
+    :root { --bg:#050505; --s1:#0a0a0a; --s2:#111; --b:#333; --t:#fff; --tm:#888; --ok:#00ff88; --er:#ff3333; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--t); font:14px system-ui; height:100vh; overflow:hidden; }
+    #app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+    .top { background:var(--s1); border-bottom:1px solid var(--b); display:flex; align-items:center; justify-content:space-between; padding:0 16px; }
+    .workspace { display:grid; grid-template-columns:260px 1fr 340px; overflow:hidden; }
+    .panel { background:var(--s1); border-right:1px solid var(--b); display:flex; flex-direction:column; }
+    .panel.right { border-right:none; border-left:1px solid var(--b); }
+    .hdr { padding:12px 14px; border-bottom:1px solid var(--b); color:var(--tm); text-transform:uppercase; font-size:11px; letter-spacing:.8px; }
+    .tree,.chat { overflow:auto; flex:1; padding:10px; }
+    .file { padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--tm); }
+    .file:hover,.file.active { background:var(--s2); color:var(--t); }
+    .editor-wrap { display:flex; flex-direction:column; }
+    .tabs { height:41px; border-bottom:1px solid var(--b); display:flex; align-items:center; gap:8px; padding:0 10px; background:var(--s1); }
+    .editor { flex:1; width:100%; border:none; outline:none; background:transparent; color:var(--t); font:13px ui-monospace, monospace; padding:16px; }
+    .msg { margin-bottom:12px; }
+    .bubble { background:var(--s2); border:1px solid var(--b); border-radius:8px; padding:10px; color:#d0d0d0; }
+    .msg.user .bubble { background:#1a1a1a; }
+    .input { padding:10px; border-top:1px solid var(--b); background:var(--s2); }
+    .row { display:flex; gap:8px; }
+    input,select,textarea,button { font:inherit; }
+    .chat-input,.api-input { flex:1; background:#000; color:var(--t); border:1px solid var(--b); border-radius:8px; padding:10px; }
+    .btn { border:1px solid var(--b); background:#1a1a1a; color:var(--t); border-radius:8px; padding:10px 12px; cursor:pointer; }
+    .btn.primary { background:var(--t); color:#000; border-color:var(--t); }
+    .pill { border:1px solid var(--b); padding:6px 10px; border-radius:999px; font-size:11px; text-transform:uppercase; color:var(--tm); cursor:pointer; }
+    .pill.active { color:var(--t); border-color:var(--t); }
+    .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; background:var(--er); }
+    .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.75); }
+    .modal.show { display:grid; }
+    .card { width:min(92vw,520px); background:var(--s1); border:1px solid var(--b); border-radius:14px; overflow:hidden; }
+    .card .hdr { padding:16px; }
+    .card .body { padding:16px; display:grid; gap:10px; }
+    .card .ftr { padding:16px; border-top:1px solid var(--b); display:flex; justify-content:flex-end; gap:8px; }
+    @media (max-width:980px){ .workspace{ grid-template-columns:1fr; } .panel{ display:none; } .panel.right{ display:flex; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="top">
+      <div><strong>◉ Agentic Builder</strong></div>
+      <div style="display:flex; gap:8px;">
+        <div id="apiPill" class="pill" onclick="app.openApiModal()"><span class="dot" id="apiDot"></span><span id="apiText">API Required</span></div>
+        <div id="autoPill" class="pill" onclick="app.toggleAuto()">Manual</div>
+      </div>
+    </div>
+    <div class="workspace">
+      <aside class="panel">
+        <div class="hdr">Explorer</div>
+        <div class="tree" id="tree"></div>
+      </aside>
+      <main class="editor-wrap">
+        <div class="tabs" id="tabs"></div>
+        <textarea id="editor" class="editor" disabled></textarea>
+      </main>
+      <aside class="panel right">
+        <div class="hdr">Agent</div>
+        <div class="chat" id="chat"></div>
+        <div class="input">
+          <div class="row">
+            <input id="chatInput" class="chat-input" disabled placeholder="Configure API key to start..." onkeypress="app.handleInput(event)" />
+            <button id="sendBtn" class="btn primary" disabled onclick="app.sendMessage()">→</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="modal" id="apiModal">
+    <div class="card">
+      <div class="hdr">Configure AI Provider</div>
+      <div class="body">
+        <select id="provider" class="api-input" onchange="app.onProviderChange()">
+          <option value="openrouter">OpenRouter</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+        <input id="apiKey" class="api-input" type="password" placeholder="API key" />
+        <select id="model" class="api-input"></select>
+        <label style="color:#aaa; font-size:12px;"><input id="sessionOnly" type="checkbox" checked /> Session only</label>
+        <small style="color:#777">Execution workflow is embedded behind the scenes.</small>
+      </div>
+      <div class="ftr">
+        <button class="btn" onclick="app.closeApiModal()">Cancel</button>
+        <button class="btn" onclick="app.clearApiKey()">Clear</button>
+        <button class="btn primary" onclick="app.saveApiKey()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    class AgenticBuilderUI {
+      constructor(){
+        this.files = new Map();
+        this.openTabs = [];
+        this.activeTab = null;
+        this.auto = false;
+        this.history = [];
+        this.api = { provider:'openrouter', key:'', model:'openai/gpt-4o-mini', sessionOnly:true };
+        this.init();
+      }
+
+      init(){
+        this.createFile('README.md', '# Agentic Builder\n\n- Context engineering\n- Atomic execution\n- Multi-agent thinking');
+        this.openFile('README.md');
+        this.renderTree();
+        this.renderTabs();
+        this.updateEditor();
+        this.onProviderChange();
+        this.addMessage('agent', 'System initialized. Configure API key to start.');
+      }
+
+      createFile(name, content=''){ this.files.set(name, { content, unsaved:false }); }
+      openFile(name){ if(!this.openTabs.includes(name)) this.openTabs.push(name); this.activeTab=name; this.renderTabs(); this.updateEditor(); this.renderTree(); }
+      renderTree(){
+        const tree=document.getElementById('tree'); tree.innerHTML='';
+        for(const [name] of this.files){
+          const el=document.createElement('div'); el.className='file'+(name===this.activeTab?' active':''); el.textContent=name; el.onclick=()=>this.openFile(name); tree.appendChild(el);
+        }
+      }
+      renderTabs(){ document.getElementById('tabs').textContent = this.activeTab || ''; }
+      updateEditor(){
+        const editor=document.getElementById('editor');
+        if(!this.activeTab) return;
+        editor.disabled=!this.api.key;
+        editor.value=this.files.get(this.activeTab).content;
+        editor.oninput=()=>{ this.files.get(this.activeTab).content=editor.value; this.files.get(this.activeTab).unsaved=true; };
+      }
+
+      openApiModal(){ document.getElementById('apiModal').classList.add('show'); }
+      closeApiModal(){ document.getElementById('apiModal').classList.remove('show'); }
+      onProviderChange(){
+        const provider=document.getElementById('provider').value;
+        const model=document.getElementById('model');
+        const map={
+          openrouter:['openai/gpt-4o-mini','anthropic/claude-3.5-sonnet','deepseek/deepseek-chat-v3.1'],
+          openai:['gpt-4o-mini','gpt-4.1-mini'],
+          anthropic:['claude-3-5-sonnet-latest','claude-3-5-haiku-latest']
+        };
+        model.innerHTML=map[provider].map(m=>`<option value="${m}">${m}</option>`).join('');
+      }
+      saveApiKey(){
+        this.api.provider=document.getElementById('provider').value;
+        this.api.key=document.getElementById('apiKey').value.trim();
+        this.api.model=document.getElementById('model').value;
+        this.api.sessionOnly=document.getElementById('sessionOnly').checked;
+        if(!this.api.key){ alert('API key required'); return; }
+        this.closeApiModal();
+        document.getElementById('chatInput').disabled=false;
+        document.getElementById('sendBtn').disabled=false;
+        document.getElementById('editor').disabled=false;
+        const dot=document.getElementById('apiDot'); dot.style.background='var(--ok)';
+        document.getElementById('apiText').textContent=this.api.provider;
+        document.getElementById('apiPill').classList.add('active');
+        this.addMessage('agent', `API configured (${this.api.provider}) model=${this.api.model}.`);
+      }
+      clearApiKey(){ this.api.key=''; sessionStorage.removeItem('gsd_api'); localStorage.removeItem('gsd_api'); this.closeApiModal(); }
+      toggleAuto(){ this.auto=!this.auto; const p=document.getElementById('autoPill'); p.classList.toggle('active',this.auto); p.textContent=this.auto?'Autonomous':'Manual'; }
+
+      handleInput(e){ if(e.key==='Enter') this.sendMessage(); }
+      addMessage(role,text){
+        const chat=document.getElementById('chat');
+        const msg=document.createElement('div'); msg.className='msg '+role;
+        msg.innerHTML=`<div class="bubble">${text}</div>`;
+        chat.appendChild(msg); chat.scrollTop=chat.scrollHeight;
+      }
+
+      async sendMessage(){
+        const input=document.getElementById('chatInput');
+        const text=input.value.trim(); if(!text) return;
+        input.value=''; this.addMessage('user', text);
+        if(!this.api.key){ this.addMessage('agent','API not configured'); return; }
+
+        const context = {
+          activeFile: this.activeTab,
+          files: Array.from(this.files.keys()),
+          execution: { mode: this.auto ? 'auto' : 'manual', methodology: 'embedded' }
+        };
+
+        const sys = `You are an execution-focused coding agent. Use atomic tasks and explicit verification.`;
+        const messages = [
+          { role:'system', content:sys },
+          ...this.history.slice(-6),
+          { role:'user', content:`Context: ${JSON.stringify(context)}\nRequest: ${text}` }
+        ];
+
+        try {
+          const out = await this.callLLM(messages);
+          this.addMessage('agent', out || 'No output');
+          this.history.push({role:'user',content:text},{role:'assistant',content:out});
+        } catch (err) {
+          this.addMessage('agent', `Error: ${err.message}`);
+        }
+      }
+
+      async callLLM(messages){
+        const cfg=this.api;
+        const endpoint = cfg.provider==='openrouter'
+          ? 'https://openrouter.ai/api/v1/chat/completions'
+          : cfg.provider==='openai'
+            ? 'https://api.openai.com/v1/chat/completions'
+            : 'https://api.anthropic.com/v1/messages';
+
+        const headers = { 'Content-Type':'application/json', 'Authorization':`Bearer ${cfg.key}` };
+        if(cfg.provider==='anthropic') headers['anthropic-version']='2023-06-01';
+
+        let body;
+        if(cfg.provider==='anthropic'){
+          body = {
+            model: cfg.model,
+            max_tokens: 2000,
+            messages: messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'assistant':'user', content:m.content }))
+          };
+        } else {
+          body = { model: cfg.model, messages, stream:false, temperature:0.5 };
+        }
+
+        const res = await fetch(endpoint,{ method:'POST', headers, body:JSON.stringify(body) });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data?.error?.message || data?.error || 'API failed');
+
+        if(cfg.provider==='anthropic') return data?.content?.[0]?.text || '';
+        return data?.choices?.[0]?.message?.content || '';
+      }
+    }
+
+    const app = new AgenticBuilderUI();
+  </script>
+</body>
+</html>
