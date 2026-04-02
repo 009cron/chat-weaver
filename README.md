@@ -137,3 +137,15 @@ Open it directly in the browser for a quick static prototype preview. Wire its m
 The prototype is inspired by GSD methodology and references:
 
 - https://github.com/gsd-build/get-shit-done
+
+## 9) GSD mode in API chat
+
+The API now supports optional GSD execution mode in conversations:
+
+- `GET /api/gsd/templates` to fetch XML task schema + default GSD prompt
+- chat controls:
+  - `/gsd on`
+  - `/gsd off`
+  - `/gsd phase:<name>`
+
+When enabled, chat context injects current GSD phase and requests XML task output for planning/execution flows.

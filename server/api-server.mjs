@@ -122,6 +122,22 @@ const AGENTS = {
   },
 };
 
+const GSD_XML_TASK_TEMPLATE = `<task type="atomic">
+  <name>short task title</name>
+  <files>path/to/file.ts, path/to/other.ts</files>
+  <action>exact change to perform</action>
+  <verify>command/check that proves done</verify>
+  <done>observable completion criteria</done>
+</task>`;
+
+const GSD_SYSTEM_PROMPT = `You are a GSD (Get Shit Done) execution agent.
+Rules:
+1) Break complex asks into atomic, verifiable tasks.
+2) Use explicit file paths and concrete verification commands.
+3) Keep momentum: propose next best action when blocked.
+4) For plans/scaffolds/debug steps, output XML tasks using this schema:
+${GSD_XML_TASK_TEMPLATE}`;
+
 function normalizeAgentId(agentId) {
   return AGENTS[agentId] ? agentId : "general";
 }
@@ -372,6 +388,8 @@ function parseHumanControls(message = "") {
     forceSwitch: false,
     goalText: "",
     sweepMode: "",
+    gsdMode: "",
+    gsdPhase: "",
   };
 
   if (/^\/goal\s+resolve$/i.test(trimmed) || /^\/resolve$/i.test(trimmed)) {
@@ -388,8 +406,22 @@ function parseHumanControls(message = "") {
   if (sweepMatch?.[1]) {
     controls.sweepMode = sweepMatch[1].toLowerCase();
   }
+  const gsdModeMatch = trimmed.match(/^\/gsd\s+(on|off)$/i);
+  if (gsdModeMatch?.[1]) {
+    controls.gsdMode = gsdModeMatch[1].toLowerCase();
+  }
+  const gsdPhaseMatch = trimmed.match(/^\/gsd\s+phase:(.+)$/i);
+  if (gsdPhaseMatch?.[1]) {
+    controls.gsdPhase = gsdPhaseMatch[1].trim();
+    controls.gsdMode = "on";
+  }
 
   return controls;
+}
+
+function extractFirstTaskXml(text = "") {
+  const match = text.match(/<task[\s\S]*?<\/task>/i);
+  return match?.[0] || "";
 }
 
 app.use(cors());
@@ -447,6 +479,11 @@ function getConversation(store, conversationId) {
       userControls: {
         autoSweep: true,
       },
+      gsd: {
+        enabled: false,
+        phase: "discovery",
+        lastTaskXml: "",
+      },
     };
     store.conversations[id] = conv;
     saveDb();
@@ -481,6 +518,16 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/agents", (_req, res) => {
   const agents = Object.entries(AGENTS).map(([id, cfg]) => ({ id, label: cfg.label, model: cfg.model }));
   res.json({ agents });
+});
+
+app.get("/api/gsd/templates", (_req, res) => {
+  res.json({
+    enabledByDefault: false,
+    xmlTaskTemplate: GSD_XML_TASK_TEMPLATE,
+    systemPrompt: GSD_SYSTEM_PROMPT,
+    phases: ["discovery", "requirements", "roadmap", "execution", "verification"],
+    controls: ["/gsd on", "/gsd off", "/gsd phase:<name>"],
+  });
 });
 
 app.get("/api/workspace/tree", (_req, res) => {
@@ -644,8 +691,14 @@ app.post("/api/chat", async (req, res) => {
   if (!conversation.userControls) {
     conversation.userControls = { autoSweep: true };
   }
+  if (!conversation.gsd) {
+    conversation.gsd = { enabled: false, phase: "discovery", lastTaskXml: "" };
+  }
   if (controls.sweepMode === "on") conversation.userControls.autoSweep = true;
   if (controls.sweepMode === "off") conversation.userControls.autoSweep = false;
+  if (controls.gsdMode === "on") conversation.gsd.enabled = true;
+  if (controls.gsdMode === "off") conversation.gsd.enabled = false;
+  if (controls.gsdPhase) conversation.gsd.phase = controls.gsdPhase.slice(0, 80);
 
   maybeUpdateGoalTracking(conversation, message, controls);
 
@@ -685,12 +738,16 @@ app.post("/api/chat", async (req, res) => {
     || /\b(code|bug|refactor|fix|typescript|javascript|react|backend|frontend)\b/i.test(message));
   const codeSweepContext = runCodeSweep ? getCodeSweepContext() : "";
   const messageWithContext = codeSweepContext ? `${enrichedMessage}\n\n${codeSweepContext}` : enrichedMessage;
+  const gsdContext = conversation.gsd.enabled
+    ? `GSD state:\n- enabled: true\n- phase: ${conversation.gsd.phase}\n- xml schema required for plan/task outputs`
+    : "";
+  const finalUserMessage = gsdContext ? `${messageWithContext}\n\n${gsdContext}` : messageWithContext;
 
   const userMessageId = crypto.randomUUID();
   conversation.messages.push({
     id: userMessageId,
     role: "user",
-    content: messageWithContext,
+    content: finalUserMessage,
     createdAt: new Date().toISOString(),
     attachments,
   });
@@ -726,7 +783,8 @@ Keep the conversation on the active goal until user explicitly marks it resolved
 Current goal status:
 - Active goal: ${conversation.goalTracking?.activeGoal || "none"}
 - Resolved at: ${conversation.goalTracking?.resolvedAt || "unresolved"}
-If user shifts topics before resolution, remind them to finish/resolve the active goal first.`,
+If user shifts topics before resolution, remind them to finish/resolve the active goal first.
+${conversation.gsd.enabled ? `\n${GSD_SYSTEM_PROMPT}\nCurrent GSD phase: ${conversation.gsd.phase}` : ""}`,
     },
     ...conversation.messages
       .filter((m) => m.id !== assistantMessageId)
@@ -784,6 +842,9 @@ If user shifts topics before resolution, remind them to finish/resolve the activ
       }
 
       assistantMessage.content = text;
+      if (conversation.gsd?.enabled) {
+        conversation.gsd.lastTaskXml = extractFirstTaskXml(text);
+      }
       conversation.updatedAt = new Date().toISOString();
       saveDb();
 
@@ -845,6 +906,9 @@ If user shifts topics before resolution, remind them to finish/resolve the activ
     }
 
     conversation.updatedAt = new Date().toISOString();
+    if (conversation.gsd?.enabled) {
+      conversation.gsd.lastTaskXml = extractFirstTaskXml(assistantMessage.content);
+    }
     saveDb();
     res.write(`data: ${JSON.stringify({ type: "done", assistantMessageId })}\n\n`);
     res.end();
