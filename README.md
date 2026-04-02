@@ -105,3 +105,12 @@ You can reference workspace files directly in a prompt:
 - `@file:path/to/file.ext`
 
 The backend will read and inject file content (truncated) into the model context.
+
+## 7) Focus lock + code improvement sweep
+
+`POST /api/chat` now includes two guardrails for execution-focused workflows:
+
+- **Stay-on-topic until resolved:** the server tracks an active goal per conversation and blocks likely topic switches until the user explicitly marks completion (e.g. `resolved`, `done`, `selesai`).
+- **Auto code-improvement sweep:** for coding/debugging flows, the server scans `WORKSPACE_DIR` for `TODO/FIXME/HACK/BUG/...` markers and injects top findings (`file:line:match`) into chat context.
+
+This helps the assistant keep momentum on one objective while still catching missed code issues across files.

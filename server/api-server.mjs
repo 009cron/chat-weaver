@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 dotenv.config();
@@ -239,6 +240,110 @@ function expandFileReferences(message) {
   };
 }
 
+const TOPIC_SWITCH_HINTS = [
+  "new topic",
+  "another topic",
+  "different topic",
+  "switch topic",
+  "topik baru",
+  "ganti topik",
+  "btw",
+  "by the way",
+  "sekarang",
+  "next question",
+  "pertanyaan baru",
+];
+
+const RESOLVED_HINTS = [
+  "resolved",
+  "done",
+  "fixed",
+  "completed",
+  "selesai",
+  "beres",
+  "sudah beres",
+  "sudah selesai",
+  "clear now",
+];
+
+function normalizeText(input = "") {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function isGoalResolvedMessage(message = "") {
+  const text = normalizeText(message);
+  return RESOLVED_HINTS.some((hint) => text.includes(hint));
+}
+
+function looksLikeTopicSwitch(message = "") {
+  const text = normalizeText(message);
+  return TOPIC_SWITCH_HINTS.some((hint) => text.includes(hint));
+}
+
+function getTopicKeywords(input = "") {
+  return normalizeText(input)
+    .split(" ")
+    .filter((w) => w.length >= 4)
+    .slice(0, 12);
+}
+
+function overlapScore(a = "", b = "") {
+  const aWords = new Set(getTopicKeywords(a));
+  const bWords = new Set(getTopicKeywords(b));
+  if (aWords.size === 0 || bWords.size === 0) return 1;
+
+  let overlap = 0;
+  for (const word of aWords) {
+    if (bWords.has(word)) overlap += 1;
+  }
+  return overlap / Math.max(1, Math.min(aWords.size, bWords.size));
+}
+
+function shouldBlockTopicSwitch(conversation, userMessage) {
+  const activeGoal = conversation?.goalTracking?.activeGoal;
+  if (!activeGoal) return false;
+  if (isGoalResolvedMessage(userMessage)) return false;
+  if (looksLikeTopicSwitch(userMessage)) return true;
+  return overlapScore(activeGoal, userMessage) < 0.2;
+}
+
+function maybeUpdateGoalTracking(conversation, userMessage) {
+  if (!conversation.goalTracking) {
+    conversation.goalTracking = {
+      activeGoal: "",
+      startedAt: new Date().toISOString(),
+      resolvedAt: null,
+    };
+  }
+
+  if (isGoalResolvedMessage(userMessage)) {
+    conversation.goalTracking.resolvedAt = new Date().toISOString();
+    return;
+  }
+
+  if (!conversation.goalTracking.activeGoal || conversation.goalTracking.resolvedAt) {
+    conversation.goalTracking.activeGoal = userMessage.slice(0, 300);
+    conversation.goalTracking.startedAt = new Date().toISOString();
+    conversation.goalTracking.resolvedAt = null;
+  }
+}
+
+function getCodeSweepContext() {
+  const command = `rg -n --hidden --glob '!node_modules' --glob '!.git' --glob '!dist' --glob '!build' --glob '!coverage' "(TODO|FIXME|HACK|BUG|XXX|REFACTOR|@ts-ignore|eslint-disable)" "${WORKSPACE_DIR}"`;
+  try {
+    const raw = execSync(command, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1024 * 1024 });
+    const lines = raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 40);
+    if (lines.length === 0) return "";
+    return `Auto code-improvement sweep findings (file:line:match):\n${lines.join("\n")}`;
+  } catch {
+    return "";
+  }
+}
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
@@ -286,6 +391,11 @@ function getConversation(store, conversationId) {
       updatedAt: now,
       messages: [],
       agentId: "general",
+      goalTracking: {
+        activeGoal: "",
+        startedAt: now,
+        resolvedAt: null,
+      },
     };
     store.conversations[id] = conv;
     saveDb();
@@ -477,18 +587,49 @@ app.post("/api/chat", async (req, res) => {
 
   conversation.agentId = normalizeAgentId(agentId || conversation.agentId || "general");
   const agentConfig = AGENTS[conversation.agentId] || AGENTS.general;
+  maybeUpdateGoalTracking(conversation, message);
+
+  if (shouldBlockTopicSwitch(conversation, message)) {
+    const reminderMessageId = crypto.randomUUID();
+    const reminder = `Let's finish your current goal first: "${conversation.goalTracking.activeGoal.slice(0, 180)}". Reply with "resolved" (or "selesai") once done, then we can switch topics.`;
+    conversation.messages.push({
+      id: reminderMessageId,
+      role: "assistant",
+      content: reminder,
+      createdAt: new Date().toISOString(),
+      attachments: [],
+    });
+    conversation.updatedAt = new Date().toISOString();
+    saveDb();
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+    res.write(
+      `data: ${JSON.stringify({ type: "meta", conversationId: conversation.id, messageId: reminderMessageId })}\n\n`
+    );
+    res.write(`data: ${JSON.stringify({ type: "delta", text: reminder })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "done", assistantMessageId: reminderMessageId })}\n\n`);
+    res.end();
+    return;
+  }
 
   const attachments = Array.isArray(attachmentIds)
     ? attachmentIds.map((id) => store.attachments[id]).filter(Boolean)
     : [];
 
   const { enriched: enrichedMessage } = expandFileReferences(message);
+  const runCodeSweep = ["coder", "reviewer", "debugger", "builder"].includes(conversation.agentId)
+    || /\b(code|bug|refactor|fix|typescript|javascript|react|backend|frontend)\b/i.test(message);
+  const codeSweepContext = runCodeSweep ? getCodeSweepContext() : "";
+  const messageWithContext = codeSweepContext ? `${enrichedMessage}\n\n${codeSweepContext}` : enrichedMessage;
 
   const userMessageId = crypto.randomUUID();
   conversation.messages.push({
     id: userMessageId,
     role: "user",
-    content: enrichedMessage,
+    content: messageWithContext,
     createdAt: new Date().toISOString(),
     attachments,
   });
@@ -516,7 +657,16 @@ app.post("/api/chat", async (req, res) => {
   );
 
   const history = [
-    { role: "system", content: agentConfig.systemPrompt },
+    {
+      role: "system",
+      content: `${agentConfig.systemPrompt}
+
+Keep the conversation on the active goal until user explicitly marks it resolved with words like "resolved", "done", or "selesai".
+Current goal status:
+- Active goal: ${conversation.goalTracking?.activeGoal || "none"}
+- Resolved at: ${conversation.goalTracking?.resolvedAt || "unresolved"}
+If user shifts topics before resolution, remind them to finish/resolve the active goal first.`,
+    },
     ...conversation.messages
       .filter((m) => m.id !== assistantMessageId)
       .map((m) => {
