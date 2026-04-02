@@ -16,12 +16,6 @@ const AGENTS: { id: AgentId; label: string }[] = [
   { id: "research", label: "Research" },
   { id: "designer", label: "Designer" },
   { id: "builder", label: "Builder" },
-  { id: "reviewer", label: "Reviewer" },
-  { id: "tester", label: "Tester" },
-  { id: "planner", label: "Planner" },
-  { id: "docs", label: "Docs" },
-  { id: "analyst", label: "Analyst" },
-  { id: "debugger", label: "Debugger" },
 ];
 
 export function ChatInput({ onSend, disabled, backendAvailable, selectedAgentId = "general" }: ChatInputProps) {
