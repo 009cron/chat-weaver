@@ -20,11 +20,14 @@ PORT=3001
 OPENROUTER_UPSTREAM_STREAM=false
 OPENROUTER_REASONING_ENABLED=false
 OPENROUTER_STT_MODEL=openai/whisper-1
-OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
 OPENROUTER_REFERER=
 OPENROUTER_TITLE=
+WORKSPACE_DIR=./workspace
 
-# Final preset (Qwen free only)
+# Global fallback if agent-specific model is missing
+OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
+
+# Free profile (coder upgraded)
 AGENT_GENERAL_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_CODER_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
 AGENT_RESEARCH_MODEL=qwen/qwen3.6-plus-preview:free
@@ -36,7 +39,6 @@ AGENT_PLANNER_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_DOCS_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_ANALYST_MODEL=qwen/qwen3.6-plus-preview:free
 AGENT_DEBUGGER_MODEL=qwen/qwen3.6-plus-preview:free
-WORKSPACE_DIR=./workspace
 ```
 
 ### Suggested final profiles
