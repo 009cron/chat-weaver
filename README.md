@@ -20,30 +20,29 @@ PORT=3001
 OPENROUTER_UPSTREAM_STREAM=false
 OPENROUTER_REASONING_ENABLED=false
 OPENROUTER_STT_MODEL=openai/whisper-1
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
 OPENROUTER_REFERER=
 OPENROUTER_TITLE=
 
-# Final preset (personal + cost-aware)
-AGENT_GENERAL_MODEL=deepseek/deepseek-v3.2
-AGENT_CODER_MODEL=qwen/qwen3-coder-30b-a3b-instruct
-AGENT_RESEARCH_MODEL=anthropic/claude-sonnet-4.6
-AGENT_DESIGNER_MODEL=anthropic/claude-sonnet-4.6
-AGENT_BUILDER_MODEL=deepseek/deepseek-v3.2
-AGENT_REVIEWER_MODEL=deepseek/deepseek-v3.2
-AGENT_TESTER_MODEL=deepseek/deepseek-v3.2
-AGENT_PLANNER_MODEL=deepseek/deepseek-v3.2
-AGENT_DOCS_MODEL=deepseek/deepseek-v3.2
-AGENT_ANALYST_MODEL=deepseek/deepseek-v3.2
-AGENT_DEBUGGER_MODEL=deepseek/deepseek-v3.2
+# Final preset (Qwen free only)
+AGENT_GENERAL_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_CODER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_RESEARCH_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_DESIGNER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_BUILDER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_REVIEWER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_TESTER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_PLANNER_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_DOCS_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_ANALYST_MODEL=qwen/qwen3.6-plus-preview:free
+AGENT_DEBUGGER_MODEL=qwen/qwen3.6-plus-preview:free
 WORKSPACE_DIR=./workspace
 ```
 
 ### Suggested final profiles
 
-- **Cost-aware (recommended personal):** use the default `.env.example` values above.
-- **Budget mode:** set all `AGENT_*_MODEL` to `deepseek/deepseek-v3.2`.
-- **Quality mode:** keep `coder=qwen3-coder`, `research/designer=claude-sonnet-4.6`.
+- **Qwen free only (recommended for now):** use the default `.env.example` values above.
+- **Override mode:** you can still set any `AGENT_*_MODEL` manually later if you want paid/stable options.
 
 ## 2) Run locally
 

@@ -43,7 +43,7 @@ function getOpenRouterKey() {
   return key;
 }
 
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v3.2";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "qwen/qwen3.6-plus-preview:free";
 const OPENROUTER_REASONING_ENABLED = process.env.OPENROUTER_REASONING_ENABLED === "true";
 const OPENROUTER_STT_MODEL = process.env.OPENROUTER_STT_MODEL || "openai/whisper-1";
 const OPENROUTER_REFERER = process.env.OPENROUTER_REFERER || "";
