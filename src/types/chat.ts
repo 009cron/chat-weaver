@@ -1,4 +1,4 @@
-export type AgentId = "general" | "coder" | "research" | "designer" | "builder" | "reviewer" | "tester" | "planner" | "docs" | "analyst" | "debugger";
+export type AgentId = "general" | "coder" | "research" | "designer" | "builder";
 
 export interface Message {
   id: string;
