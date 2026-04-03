@@ -81,7 +81,6 @@ export async function streamChat(params: {
         conversationId: params.conversationId,
         sessionId,
         attachmentIds: params.attachmentIds || [],
-        agentId: params.agentId || "general",
       }),
       signal: controller.signal,
     });
