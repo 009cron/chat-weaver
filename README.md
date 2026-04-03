@@ -6,6 +6,27 @@ Frontend chat UI (Vite + React) with a local Node API server that streams OpenRo
 
 ```bash
 npm install
+cp .env.example .env
+```
+
+Create `.env` in project root (or edit the generated file):
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
+```
+
+Itu saja yang **wajib**. Semua env lain punya default internal dan sifatnya opsional untuk tuning.
+
+### Optional tuning (kalau nanti diperlukan)
+
+- `OPENROUTER_MODEL`
+- `AGENT_*_MODEL`
+- `OPENROUTER_UPSTREAM_STREAM`
+- `OPENROUTER_REASONING_ENABLED`
+- `OPENROUTER_STT_MODEL`
+- `OPENROUTER_REFERER`, `OPENROUTER_TITLE`
+- `WORKSPACE_DIR`
+
 ```
 
 Create `.env` in project root:
