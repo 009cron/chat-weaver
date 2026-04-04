@@ -24,9 +24,10 @@ function CopyButton({ text }: { text: string }) {
 
 export function MarkdownRenderer({ content }: { content: string }) {
   return (
-    <div className="prose prose-invert prose-sm max-w-none break-words">
+    <div className="max-w-none break-words text-foreground">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      children={content}
       components={{
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || "");

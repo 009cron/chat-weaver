@@ -225,7 +225,10 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function healthCheck(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/health`);
-    return res.ok;
+    if (!res.ok) return false;
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) return false;
+    return true;
   } catch {
     return false;
   }

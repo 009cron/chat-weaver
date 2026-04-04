@@ -109,7 +109,7 @@ export function useChat() {
   );
 
   const sendMessageDemo = useCallback(
-    async (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
+    (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
       const userMsg: Message = {
         id: generateId(),
         role: "user",
@@ -118,56 +118,26 @@ export function useChat() {
         attachments,
       };
 
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === convId
-            ? {
-                ...c,
-                title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
-                messages: [...c.messages, userMsg],
-                updatedAt: new Date(),
-                agentId,
-              }
-            : c
-        )
-      );
-
-      setIsStreaming(true);
-
-      const assistantId = generateId();
       const assistantMsg: Message = {
-        id: assistantId,
+        id: generateId(),
         role: "assistant",
-        content: "",
+        content: DEMO_RESPONSE,
         timestamp: new Date(),
       };
 
       setConversations((prev) =>
         prev.map((c) =>
           c.id === convId
-            ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date() }
+            ? {
+                ...c,
+                title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
+                messages: [...c.messages, userMsg, assistantMsg],
+                updatedAt: new Date(),
+                agentId,
+              }
             : c
         )
       );
-
-      for (let i = 0; i < DEMO_RESPONSE.length; i++) {
-        await new Promise((r) => setTimeout(r, 15));
-        const partial = DEMO_RESPONSE.slice(0, i + 1);
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === convId
-              ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantId ? { ...m, content: partial } : m
-                  ),
-                }
-              : c
-          )
-        );
-      }
-
-      setIsStreaming(false);
     },
     []
   );
@@ -283,6 +253,7 @@ export function useChat() {
       if (!convId) {
         convId = createConversation(agentId);
       }
+      
 
       if (backendAvailable) {
         await sendMessageApi(content, convId, attachments, agentId);
