@@ -27,6 +27,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
     <div className="prose prose-invert prose-sm max-w-none break-words">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      children={content}
       components={{
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || "");
