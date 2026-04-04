@@ -118,13 +118,22 @@ export function useChat() {
         attachments,
       };
 
+      const assistantId = generateId();
+      const assistantMsg: Message = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      // Add both messages at once to avoid race conditions
       setConversations((prev) =>
         prev.map((c) =>
           c.id === convId
             ? {
                 ...c,
                 title: c.messages.length === 0 ? content.slice(0, 40) : c.title,
-                messages: [...c.messages, userMsg],
+                messages: [...c.messages, userMsg, assistantMsg],
                 updatedAt: new Date(),
                 agentId,
               }
@@ -134,21 +143,8 @@ export function useChat() {
 
       setIsStreaming(true);
 
-      const assistantId = generateId();
-      const assistantMsg: Message = {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      };
-
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === convId
-            ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date() }
-            : c
-        )
-      );
+      // Small delay to let React commit the state
+      await new Promise((r) => setTimeout(r, 50));
 
       for (let i = 0; i < DEMO_RESPONSE.length; i++) {
         await new Promise((r) => setTimeout(r, 15));
