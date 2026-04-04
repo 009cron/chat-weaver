@@ -278,6 +278,7 @@ export function useChat() {
       if (!convId) {
         convId = createConversation(agentId);
       }
+      console.log("[sendMessage] backendAvailable:", backendAvailable, "convId:", convId);
 
       if (backendAvailable) {
         await sendMessageApi(content, convId, attachments, agentId);
