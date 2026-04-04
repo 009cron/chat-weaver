@@ -142,8 +142,7 @@ export function useChat() {
       );
 
       setIsStreaming(true);
-
-      // Small delay to let React commit the state
+      console.log("[demo] Starting stream for convId:", convId, "assistantId:", assistantId);
       await new Promise((r) => setTimeout(r, 50));
 
       for (let i = 0; i < DEMO_RESPONSE.length; i++) {
