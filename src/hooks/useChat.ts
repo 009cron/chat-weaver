@@ -109,7 +109,7 @@ export function useChat() {
   );
 
   const sendMessageDemo = useCallback(
-    async (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
+    (content: string, convId: string, attachments?: Attachment[], agentId: AgentId = "general") => {
       const userMsg: Message = {
         id: generateId(),
         role: "user",
@@ -118,15 +118,13 @@ export function useChat() {
         attachments,
       };
 
-      const assistantId = generateId();
       const assistantMsg: Message = {
-        id: assistantId,
+        id: generateId(),
         role: "assistant",
-        content: "",
+        content: DEMO_RESPONSE,
         timestamp: new Date(),
       };
 
-      // Add both messages at once to avoid race conditions
       setConversations((prev) =>
         prev.map((c) =>
           c.id === convId
@@ -140,29 +138,6 @@ export function useChat() {
             : c
         )
       );
-
-      setIsStreaming(true);
-      console.log("[demo] Starting stream for convId:", convId, "assistantId:", assistantId);
-      await new Promise((r) => setTimeout(r, 50));
-
-      for (let i = 0; i < DEMO_RESPONSE.length; i++) {
-        await new Promise((r) => setTimeout(r, 15));
-        const partial = DEMO_RESPONSE.slice(0, i + 1);
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === convId
-              ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantId ? { ...m, content: partial } : m
-                  ),
-                }
-              : c
-          )
-        );
-      }
-
-      setIsStreaming(false);
     },
     []
   );
